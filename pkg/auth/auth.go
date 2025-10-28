@@ -28,6 +28,7 @@ type AppClaims struct {
 	jwt.RegisteredClaims
 }
 
+// JWTManager handles generating and verifying JWT tokens.
 type JWTManager struct {
 	secretKey     []byte
 	tokenDuration time.Duration
@@ -53,6 +54,7 @@ func (m *JWTManager) GenerateToken(userID string, role Role) (string, error) {
 	return token.SignedString(m.secretKey)
 }
 
+// ParseToken checks the token's validity and returns the claims
 func (m *JWTManager) ParseToken(tokenString string) (*AppClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &AppClaims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -72,6 +74,7 @@ func (m *JWTManager) ParseToken(tokenString string) (*AppClaims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
+// AuthMiddleware is an HTTP middleware that verifies the JWT token.
 func (m *JWTManager) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")

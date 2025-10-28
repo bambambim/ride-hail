@@ -15,6 +15,7 @@ const (
 	retryInterval = 3 * time.Second
 )
 
+// Connection is a wrapper around the amqp.Connection that handles auto-reconnection.
 type Connection struct {
 	logger      logger.Logger
 	config      *config.Config
@@ -124,6 +125,7 @@ func (c *Connection) reconnectLoop() {
 	}
 }
 
+// SetupTopology declares all required topology.
 func (c *Connection) SetupTopology() error {
 	c.mu.RLock()
 	if !c.isConnected {
@@ -183,6 +185,7 @@ func (c *Connection) SetupTopology() error {
 	return nil
 }
 
+// Publish sends a message to an exchange. It is goroutine-safe.
 func (c *Connection) Publish(ctx context.Context, exchange, routingkey string, body []byte) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -276,6 +279,7 @@ func (c *Connection) Consume(queueName string, handler func(amqp.Delivery)) erro
 	return nil
 }
 
+// Close gracefully shuts down the connection and the reconnect loop.
 func (c *Connection) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

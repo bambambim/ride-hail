@@ -14,6 +14,7 @@ const (
 	retryInterval = 3 * time.Second
 )
 
+// NewConnection creates a new PostgreSQL connection pool with retry logic.
 func NewConnection(cfg *config.Config, log logger.Logger) (*pgxpool.Pool, error) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		cfg.DB.User,

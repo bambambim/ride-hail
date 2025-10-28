@@ -34,6 +34,7 @@ type wsErrorResponse struct {
 	Message string `json:"message"`
 }
 
+// AuthRequest is the expected first message from the client.
 type authRequest struct {
 	Type  string `json:"type"`
 	Token string `json:"message"`
@@ -47,6 +48,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// Connection is a wrapper around the websocket.Conn
 type Connection struct {
 	conn       *websocket.Conn
 	log        logger.Logger
@@ -67,6 +69,7 @@ func newConnection(conn *websocket.Conn, log logger.Logger, claims *auth.AppClai
 	}
 }
 
+// writePump pumps messages from the send channel to the websocket connection.
 func (c *Connection) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -105,6 +108,7 @@ func (c *Connection) write(mt int, payload []byte) error {
 	return c.conn.WriteMessage(mt, payload)
 }
 
+// WriteJSON is a goroutine-safe method to send a JSON message.
 func (c *Connection) WriteJSON(v interface{}) error {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -122,6 +126,9 @@ func (c *Connection) WriteJSON(v interface{}) error {
 	}
 }
 
+// ReadPump pumps messages from the websocket connection to the onMessage callback.
+// The service's onConnect function MUST call this to start reading messages.
+// This function blocks until the connection is closed.
 func (c *Connection) ReadPump(onMessage func(msgType int, p []byte), onDisconnect func()) {
 	defer func() {
 		onDisconnect()
@@ -151,6 +158,7 @@ func (c *Connection) ReadPump(onMessage func(msgType int, p []byte), onDisconnec
 	}
 }
 
+// Close gracefully closes the connection.
 func (c *Connection) Close() {
 	c.writeMutex.Lock()
 	defer c.writeMutex.Unlock()
@@ -165,6 +173,7 @@ func (c *Connection) Close() {
 	}
 }
 
+// Handler is an http.Handler that upgrades connections and manages auth.
 type Handler struct {
 	log          logger.Logger
 	jwtManager   *auth.JWTManager
@@ -181,6 +190,7 @@ func NewHandler(log logger.Logger, jwtManager *auth.JWTManager, onConnect func(c
 	}
 }
 
+// ServeHTTP handles the HTTP request to upgrade it to a WebSocket.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
