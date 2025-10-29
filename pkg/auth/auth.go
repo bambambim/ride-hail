@@ -13,7 +13,7 @@ import (
 type Role string
 
 const (
-	RolePassanger Role = "PASSANGER"
+	RolePassenger Role = "PASSANGER"
 	RoleDriver    Role = "DRIVER"
 	RoleAdmin     Role = "ADMIN"
 )
