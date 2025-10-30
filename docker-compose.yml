@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ridehail-postgres
+    environment:
+      POSTGRES_USER: ridehail_user
+      POSTGRES_PASSWORD: ridehail_pass
+      POSTGRES_DB: ridehail_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - ridehail-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ridehail_user -d ridehail_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: ridehail-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ridehail-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ride Service
+  ride-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ridehail-ride-service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ridehail_user
+      DB_PASS: ridehail_pass
+      DB_NAME: ridehail_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      SERVICES_RIDE_SERVICE: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ridehail-network
+    restart: unless-stopped
+
+networks:
+  ridehail-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
