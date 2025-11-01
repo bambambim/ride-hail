@@ -1,0 +1,209 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database with PostGIS
+  postgres:
+    image: postgis/postgis:15-3.4-alpine
+    container_name: driver-location-postgres-dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ride_hail
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ../../../migrations/driver_location_service.sql:/docker-entrypoint-initdb.d/02-driver-location.sql:ro
+      - ./sql:/sql:ro # Mount SQL scripts for testing
+    networks:
+      - driver-location-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ride_hail"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # pgAdmin - PostgreSQL Admin Tool
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: driver-location-pgadmin-dev
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@ridehail.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+    networks:
+      - driver-location-dev-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: driver-location-rabbitmq-dev
+    hostname: rabbitmq-dev
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit log_levels [{connection,info},{default,info}]
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI port
+    volumes:
+      - rabbitmq_dev_data:/var/lib/rabbitmq
+      - rabbitmq_dev_logs:/var/log/rabbitmq
+    networks:
+      - driver-location-dev-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Redis - For caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: driver-location-redis-dev
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - driver-location-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Mailhog - Email testing tool
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: driver-location-mailhog-dev
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI
+    networks:
+      - driver-location-dev-network
+    restart: unless-stopped
+
+  # Driver Location Service (Development Mode)
+  driver-location-service:
+    build:
+      context: ../../..
+      dockerfile: ./services/driver_location_service/Dockerfile
+      target: builder
+    container_name: driver-location-service-dev
+    hostname: driver-location-service-dev
+    environment:
+      # Server Configuration
+      HOST: 0.0.0.0
+      PORT: 8082
+
+      # Database Configuration
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ride_hail?sslmode=disable
+      DB_MAX_CONNS: 10
+      DB_MIN_CONNS: 2
+
+      # RabbitMQ Configuration
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_EXCHANGE_RIDE: ride_topic
+      RABBITMQ_EXCHANGE_DRIVER: driver_topic
+      RABBITMQ_EXCHANGE_LOCATION: location_fanout
+      RABBITMQ_QUEUE_MATCHING: driver_matching
+      RABBITMQ_QUEUE_STATUS: ride_status_update
+
+      # Redis Configuration (optional)
+      REDIS_URL: redis://redis:6379
+
+      # Logging
+      LOG_LEVEL: DEBUG
+
+      # Rate Limiting (relaxed for development)
+      RATE_LIMIT_LOCATION_INTERVAL: 1s
+      RATE_LIMIT_LOCATION_CAPACITY: 5
+
+      # WebSocket Configuration
+      WS_PING_PERIOD: 54s
+      WS_PONG_WAIT: 60s
+      WS_WRITE_WAIT: 10s
+      WS_MAX_MESSAGE_SIZE: 524288
+
+      # PostGIS Configuration
+      DEFAULT_SEARCH_RADIUS_KM: 10.0
+      MAX_NEARBY_DRIVERS: 50
+
+      # Service Configuration
+      SERVICE_NAME: driver-location-service-dev
+      SHUTDOWN_TIMEOUT: 30s
+
+      # Development flags
+      GO_ENV: development
+      DEBUG_MODE: "true"
+    ports:
+      - "8082:8082"
+      - "2345:2345" # Delve debugger port
+    volumes:
+      - ../../..:/workspace:cached
+      - go_dev_cache:/go/pkg/mod
+    networks:
+      - driver-location-dev-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo 'Installing air for hot reload...' &&
+        go install github.com/cosmtrek/air@latest &&
+        cd /workspace/services/driver_location_service &&
+        air -c .air.toml || go run cmd/main.go
+      "
+    restart: unless-stopped
+
+networks:
+  driver-location-dev-network:
+    driver: bridge
+    name: driver-location-dev-network
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.29.0.0/16
+
+volumes:
+  postgres_dev_data:
+    name: driver-location-postgres-dev-data
+    driver: local
+  pgadmin_dev_data:
+    name: driver-location-pgadmin-dev-data
+    driver: local
+  rabbitmq_dev_data:
+    name: driver-location-rabbitmq-dev-data
+    driver: local
+  rabbitmq_dev_logs:
+    name: driver-location-rabbitmq-dev-logs
+    driver: local
+  redis_dev_data:
+    name: driver-location-redis-dev-data
+    driver: local
+  go_dev_cache:
+    name: driver-location-go-cache
+    driver: local

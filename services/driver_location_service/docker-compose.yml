@@ -1,0 +1,164 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database with PostGIS
+  postgres:
+    image: postgis/postgis:15-3.4-alpine
+    container_name: driver-location-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ride_hail
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ../../../migrations/driver_location_service.sql:/docker-entrypoint-initdb.d/02-driver-location.sql:ro
+    networks:
+      - driver-location-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ride_hail"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: driver-location-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit log_levels [{connection,error},{default,error}] disk_free_limit 2147483648
+    ports:
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_logs:/var/log/rabbitmq
+    networks:
+      - driver-location-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Driver Location Service
+  driver-location-service:
+    build:
+      context: ../../..
+      dockerfile: ./services/driver_location_service/Dockerfile
+    container_name: driver-location-service
+    hostname: driver-location-service
+    environment:
+      # Server Configuration
+      HOST: 0.0.0.0
+      PORT: 8082
+
+      # Database Configuration
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ride_hail?sslmode=disable
+      DB_MAX_CONNS: 25
+      DB_MIN_CONNS: 5
+
+      # RabbitMQ Configuration
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_EXCHANGE_RIDE: ride_topic
+      RABBITMQ_EXCHANGE_DRIVER: driver_topic
+      RABBITMQ_EXCHANGE_LOCATION: location_fanout
+      RABBITMQ_QUEUE_MATCHING: driver_matching
+      RABBITMQ_QUEUE_STATUS: ride_status_update
+
+      # Logging
+      LOG_LEVEL: INFO
+
+      # Rate Limiting
+      RATE_LIMIT_LOCATION_INTERVAL: 3s
+      RATE_LIMIT_LOCATION_CAPACITY: 1
+
+      # WebSocket Configuration
+      WS_PING_PERIOD: 54s
+      WS_PONG_WAIT: 60s
+      WS_WRITE_WAIT: 10s
+      WS_MAX_MESSAGE_SIZE: 524288
+
+      # PostGIS Configuration
+      DEFAULT_SEARCH_RADIUS_KM: 5.0
+      MAX_NEARBY_DRIVERS: 10
+
+      # Service Configuration
+      SERVICE_NAME: driver-location-service
+      SHUTDOWN_TIMEOUT: 30s
+
+      # Timeouts
+      HTTP_READ_TIMEOUT: 10s
+      HTTP_WRITE_TIMEOUT: 10s
+      HTTP_IDLE_TIMEOUT: 120s
+    ports:
+      - "8082:8082"
+    networks:
+      - driver-location-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  driver-location-network:
+    driver: bridge
+    name: driver-location-network
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  postgres_data:
+    name: driver-location-postgres-data
+    driver: local
+  rabbitmq_data:
+    name: driver-location-rabbitmq-data
+    driver: local
+  rabbitmq_logs:
+    name: driver-location-rabbitmq-logs
+    driver: local

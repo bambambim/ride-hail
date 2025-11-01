@@ -89,20 +89,76 @@ docker-build: ## Build Docker image
 	cd ../../.. && docker build -t $(SERVICE_NAME):latest -f ./services/$(SERVICE_NAME)/Dockerfile .
 	@echo "$(COLOR_GREEN)✓ Docker image built$(COLOR_RESET)"
 
-docker-up: ## Start Docker Compose services
+docker-up: ## Start Docker Compose services (production)
 	@echo "$(COLOR_BLUE)Starting Docker Compose services...$(COLOR_RESET)"
-	docker-compose -f ../../docker-compose.yml up -d postgres rabbitmq
+	docker-compose up -d
 	@echo "$(COLOR_GREEN)✓ Services started$(COLOR_RESET)"
 	@echo "$(COLOR_YELLOW)Waiting for services to be ready...$(COLOR_RESET)"
-	@sleep 5
+	@sleep 10
+	@echo "$(COLOR_GREEN)Services ready!$(COLOR_RESET)"
+	@echo ""
+	@echo "$(COLOR_BOLD)Access URLs:$(COLOR_RESET)"
+	@echo "  Service:     http://localhost:8082"
+	@echo "  RabbitMQ UI: http://localhost:15672 (guest/guest)"
+	@echo ""
 
 docker-down: ## Stop Docker Compose services
 	@echo "$(COLOR_BLUE)Stopping Docker Compose services...$(COLOR_RESET)"
-	docker-compose -f ../../docker-compose.yml down
+	docker-compose down
 	@echo "$(COLOR_GREEN)✓ Services stopped$(COLOR_RESET)"
 
 docker-logs: ## View Docker Compose logs
-	docker-compose -f ../../docker-compose.yml logs -f
+	docker-compose logs -f
+
+docker-dev-up: ## Start development environment with all tools
+	@echo "$(COLOR_BLUE)Starting development environment...$(COLOR_RESET)"
+	docker-compose -f docker-compose.dev.yml up -d
+	@echo "$(COLOR_GREEN)✓ Development environment started$(COLOR_RESET)"
+	@echo "$(COLOR_YELLOW)Waiting for services to be ready...$(COLOR_RESET)"
+	@sleep 10
+	@echo "$(COLOR_GREEN)Development environment ready!$(COLOR_RESET)"
+	@echo ""
+	@echo "$(COLOR_BOLD)Access URLs:$(COLOR_RESET)"
+	@echo "  Service:     http://localhost:8082"
+	@echo "  RabbitMQ UI: http://localhost:15672 (guest/guest)"
+	@echo "  pgAdmin:     http://localhost:5050 (admin@ridehail.com/admin)"
+	@echo "  Redis:       localhost:6379"
+	@echo "  Mailhog:     http://localhost:8025"
+	@echo ""
+
+docker-dev-down: ## Stop development environment
+	@echo "$(COLOR_BLUE)Stopping development environment...$(COLOR_RESET)"
+	docker-compose -f docker-compose.dev.yml down
+	@echo "$(COLOR_GREEN)✓ Development environment stopped$(COLOR_RESET)"
+
+docker-dev-logs: ## View development environment logs
+	docker-compose -f docker-compose.dev.yml logs -f
+
+docker-restart: ## Restart Docker Compose services
+	@echo "$(COLOR_BLUE)Restarting services...$(COLOR_RESET)"
+	docker-compose restart
+	@echo "$(COLOR_GREEN)✓ Services restarted$(COLOR_RESET)"
+
+docker-rebuild: ## Rebuild and restart services
+	@echo "$(COLOR_BLUE)Rebuilding and restarting services...$(COLOR_RESET)"
+	docker-compose down
+	cd ../../.. && docker build -t $(SERVICE_NAME):latest -f ./services/$(SERVICE_NAME)/Dockerfile .
+	docker-compose up -d
+	@echo "$(COLOR_GREEN)✓ Services rebuilt and restarted$(COLOR_RESET)"
+
+docker-clean: ## Remove all containers, volumes, and images
+	@echo "$(COLOR_BLUE)Cleaning up Docker resources...$(COLOR_RESET)"
+	docker-compose down -v
+	docker-compose -f docker-compose.dev.yml down -v
+	docker rmi $(SERVICE_NAME):latest 2>/dev/null || true
+	@echo "$(COLOR_GREEN)✓ Cleanup complete$(COLOR_RESET)"
+
+docker-ps: ## Show running containers
+	@echo "$(COLOR_BOLD)Running containers:$(COLOR_RESET)"
+	@docker-compose ps
+
+docker-stats: ## Show container resource usage
+	@docker stats --no-stream $$(docker-compose ps -q)
 
 migrate-up: ## Run database migrations up
 	@echo "$(COLOR_BLUE)Running migrations up...$(COLOR_RESET)"

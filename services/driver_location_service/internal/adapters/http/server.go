@@ -3,38 +3,39 @@ package http
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"ride-hail/pkg/logger"
 )
 
 // Server represents the HTTP server for the driver location service
 type Server struct {
 	httpServer *http.Server
 	router     *Router
-	logger     *log.Logger
+	logger     logger.Logger
 	config     ServerConfig
 }
 
 // ServerConfig holds configuration for the HTTP server
 type ServerConfig struct {
-	Host                   string
-	Port                   int
-	ShutdownTimeout        time.Duration
-	Logger                 *log.Logger
-	Handler                *Handler
+	Host            string
+	Port            int
+	ShutdownTimeout time.Duration
+	Logger          logger.Logger
+	Handler         *Handler
 }
 
 // DefaultServerConfig returns a server config with sensible defaults
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		Host:                   "0.0.0.0",
-		Port:                   8080,
-		ShutdownTimeout:        30 * time.Second,
-		Logger:                 log.Default(),
+		Host:            "0.0.0.0",
+		Port:            8080,
+		ShutdownTimeout: 30 * time.Second,
+		Logger:          logger.NewLogger("driver-location-service"),
 	}
 }
 
@@ -51,7 +52,7 @@ func NewServer(config ServerConfig) *Server {
 		config.ShutdownTimeout = 30 * time.Second
 	}
 	if config.Logger == nil {
-		config.Logger = log.Default()
+		config.Logger = logger.NewLogger("driver-location-service")
 	}
 
 	// Create router with handler
@@ -63,9 +64,8 @@ func NewServer(config ServerConfig) *Server {
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	httpServer := &http.Server{
-		Addr:         addr,
-		Handler:      router,
-		ErrorLog:     config.Logger,
+		Addr:    addr,
+		Handler: router,
 	}
 
 	return &Server{
@@ -78,7 +78,7 @@ func NewServer(config ServerConfig) *Server {
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
-	s.logger.Printf("Starting HTTP server on %s", s.httpServer.Addr)
+	s.logger.Info("server.start", fmt.Sprintf("Starting HTTP server on %s", s.httpServer.Addr))
 
 	return s.startWithGracefulShutdown()
 }
@@ -90,7 +90,7 @@ func (s *Server) startWithGracefulShutdown() error {
 
 	// Start the server in a goroutine
 	go func() {
-		s.logger.Printf("Server listening on %s", s.httpServer.Addr)
+		s.logger.Info("server.listen", fmt.Sprintf("Server listening on %s", s.httpServer.Addr))
 		serverErrors <- s.httpServer.ListenAndServe()
 	}()
 
@@ -101,10 +101,13 @@ func (s *Server) startWithGracefulShutdown() error {
 	// Block until we receive a signal or an error
 	select {
 	case err := <-serverErrors:
-		return fmt.Errorf("server error: %w", err)
+		if err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("server error: %w", err)
+		}
+		return nil
 
 	case sig := <-shutdown:
-		s.logger.Printf("Received signal %v, starting graceful shutdown", sig)
+		s.logger.Info("server.shutdown", fmt.Sprintf("Received signal %v, starting graceful shutdown", sig))
 
 		// Create context with timeout for shutdown
 		ctx, cancel := context.WithTimeout(context.Background(), s.config.ShutdownTimeout)
@@ -113,14 +116,14 @@ func (s *Server) startWithGracefulShutdown() error {
 		// Attempt graceful shutdown
 		if err := s.httpServer.Shutdown(ctx); err != nil {
 			// Force close if graceful shutdown fails
-			s.logger.Printf("Error during graceful shutdown, forcing close: %v", err)
+			s.logger.Error("server.shutdown.error", err)
 			if closeErr := s.httpServer.Close(); closeErr != nil {
 				return fmt.Errorf("could not force close server: %w", closeErr)
 			}
 			return fmt.Errorf("could not gracefully shutdown server: %w", err)
 		}
 
-		s.logger.Println("Server stopped gracefully")
+		s.logger.Info("server.shutdown.complete", "Server stopped gracefully")
 	}
 
 	return nil
@@ -128,13 +131,13 @@ func (s *Server) startWithGracefulShutdown() error {
 
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.logger.Println("Shutting down server...")
+	s.logger.Info("server.shutdown", "Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
 }
 
 // Close immediately closes the server
 func (s *Server) Close() error {
-	s.logger.Println("Closing server...")
+	s.logger.Info("server.close", "Closing server...")
 	return s.httpServer.Close()
 }
 

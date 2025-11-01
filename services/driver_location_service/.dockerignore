@@ -1,0 +1,71 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+*.test
+*.out
+
+# Development files
+.env
+.env.*
+!.env.example
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (not needed in container)
+*.md
+!README.md
+docs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Testing
+coverage.out
+coverage.html
+*.test
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+!build/
+
+# Dependencies (will be downloaded in container)
+vendor/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Makefile (not needed in runtime)
+Makefile
+
+# Air (hot reload tool)
+.air.toml
+tmp/

@@ -41,7 +41,7 @@ func (s *driverService) GoOnline(ctx context.Context, driverID string, req *doma
 	s.logger.Info("driver.go_online", fmt.Sprintf("Driver %s going online", driverID))
 
 	// Get driver to verify they exist
-	driver, err := s.repo.GetByID(ctx, driverID)
+	_, err := s.repo.GetByID(ctx, driverID)
 	if err != nil {
 		s.logger.Error("driver.go_online.get_driver", err)
 		return nil, fmt.Errorf("failed to get driver: %w", err)
@@ -114,8 +114,8 @@ func (s *driverService) GoOnline(ctx context.Context, driverID string, req *doma
 func (s *driverService) GoOffline(ctx context.Context, driverID string) (*domain.OfflineResponse, error) {
 	s.logger.Info("driver.go_offline", fmt.Sprintf("Driver %s going offline", driverID))
 
-	// Get driver
-	driver, err := s.repo.GetByID(ctx, driverID)
+	// Get driver to verify they exist
+	_, err := s.repo.GetByID(ctx, driverID)
 	if err != nil {
 		s.logger.Error("driver.go_offline.get_driver", err)
 		return nil, fmt.Errorf("failed to get driver: %w", err)

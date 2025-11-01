@@ -15,6 +15,7 @@ import (
 	"ride-hail/services/driver_location_service/internal/adapters/ratelimit"
 	"ride-hail/services/driver_location_service/internal/adapters/repository"
 	"ride-hail/services/driver_location_service/internal/adapters/websocket"
+	"ride-hail/services/driver_location_service/internal/ports"
 	"ride-hail/services/driver_location_service/internal/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -190,7 +191,7 @@ func initDatabase(databaseURL string, log logger.Logger) (*pgxpool.Pool, error) 
 }
 
 // initMessageBroker initializes the RabbitMQ message broker
-func initMessageBroker(config Config, log logger.Logger) (*messaging.RabbitMQBroker, error) {
+func initMessageBroker(config Config, log logger.Logger) (ports.MessageBroker, error) {
 	brokerConfig := messaging.RabbitMQConfig{
 		URL:    config.RabbitMQURL,
 		Logger: log,
@@ -213,7 +214,7 @@ func initMessageBroker(config Config, log logger.Logger) (*messaging.RabbitMQBro
 	}
 
 	log.Info("messaging.connected", "Successfully connected to RabbitMQ")
-	return broker.(*messaging.RabbitMQBroker), nil
+	return broker, nil
 }
 
 // Helper functions
