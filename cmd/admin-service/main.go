@@ -1,4 +1,4 @@
-package main
+package adminservice
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func main() {
+func AdminService() {
 	log := logger.NewLogger("admin-service")
 	log.Info("startup", "Starting admin service")
 
@@ -39,10 +39,7 @@ func main() {
 	jwtManager := auth.NewJWTManager("someone", 1*time.Hour)
 
 	mux := http.NewServeMux()
-	adminHandler := &AdminHandler{
-		log:  log,
-		pool: pool,
-	}
+	adminHandler := NewAdminHandler(log, pool)
 
 	overviewHandler := jwtManager.AuthMiddleware(adminOnly(log, http.HandlerFunc(adminHandler.getOverviewMetrics)))
 	activeRidesHandler := jwtManager.AuthMiddleware(adminOnly(log, http.HandlerFunc(adminHandler.getActiveRides)))

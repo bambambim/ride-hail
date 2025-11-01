@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Role string
@@ -90,7 +91,7 @@ func (m *JWTManager) AuthMiddleware(next http.Handler) http.Handler {
 
 		claims, err := m.ParseToken(parts[1])
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, fmt.Sprintf("invalid token: %w", err))
+			writeError(w, http.StatusUnauthorized, fmt.Sprintf("invalid token: %v", err))
 			return
 		}
 

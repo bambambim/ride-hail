@@ -1,0 +1,392 @@
+package handler
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+
+	"ride-hail/internal/ride-service/repository"
+	"ride-hail/internal/ride-service/service"
+	"ride-hail/pkg/auth"
+	"ride-hail/pkg/logger"
+	"ride-hail/pkg/rabbitmq"
+	"ride-hail/pkg/uuid"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type Handler struct {
+	repo   *repository.RideRepository
+	rabbit *rabbitmq.Connection
+	log    logger.Logger
+	db     *pgxpool.Pool
+}
+
+func New(db *pgxpool.Pool, rabbit *rabbitmq.Connection, log logger.Logger) *Handler {
+	return &Handler{
+		repo:   repository.New(db),
+		rabbit: rabbit,
+		log:    log,
+		db:     db,
+	}
+}
+
+func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+type CreateRideRequest struct {
+	PickupLocation struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	} `json:"pickup_location"`
+	DestinationLocation struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	} `json:"destination_location"`
+	RideType string `json:"ride_type"`
+}
+
+type CreateRideResponse struct {
+	RideID        string  `json:"ride_id"`
+	Status        string  `json:"status"`
+	EstimatedFare float64 `json:"estimated_fare"`
+	RideNumber    string  `json:"ride_number"`
+}
+
+func (h *Handler) CreateRide(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse request
+	var req CreateRideRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.WithFields(logger.LogFields{
+			"error": err.Error(),
+		}).Error("parse_request_failed", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	h.log.WithFields(logger.LogFields{
+		"pickup_lat": req.PickupLocation.Latitude,
+		"pickup_lng": req.PickupLocation.Longitude,
+		"dest_lat":   req.DestinationLocation.Latitude,
+		"dest_lng":   req.DestinationLocation.Longitude,
+		"ride_type":  req.RideType,
+	}).Info("create_ride_request", "Received create ride request")
+
+	// Validate coordinates
+	if !isValidCoordinate(req.PickupLocation.Latitude, req.PickupLocation.Longitude) {
+		http.Error(w, "Invalid pickup coordinates", http.StatusBadRequest)
+		return
+	}
+	if !isValidCoordinate(req.DestinationLocation.Latitude, req.DestinationLocation.Longitude) {
+		http.Error(w, "Invalid destination coordinates", http.StatusBadRequest)
+		return
+	}
+
+	// Validate coordinates
+	if req.PickupLocation.Latitude < -90 || req.PickupLocation.Latitude > 90 ||
+		req.PickupLocation.Longitude < -180 || req.PickupLocation.Longitude > 180 {
+		h.log.Error("invalid_pickup_coordinates", fmt.Errorf("lat: %f, lng: %f",
+			req.PickupLocation.Latitude, req.PickupLocation.Longitude))
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid pickup coordinates"})
+		return
+	}
+	if req.DestinationLocation.Latitude < -90 || req.DestinationLocation.Latitude > 90 ||
+		req.DestinationLocation.Longitude < -180 || req.DestinationLocation.Longitude > 180 {
+		h.log.Error("invalid_destination_coordinates", fmt.Errorf("lat: %f, lng: %f",
+			req.DestinationLocation.Latitude, req.DestinationLocation.Longitude))
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid destination coordinates"})
+		return
+	}
+
+	// Validate ride_type
+	validTypes := map[string]bool{"ECONOMY": true, "PREMIUM": true, "XL": true}
+	if !validTypes[req.RideType] {
+		h.log.Error("invalid_ride_type", fmt.Errorf("invalid type: %s", req.RideType))
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid ride_type"})
+		return
+	}
+
+	// Extract passenger_id from JWT token
+	claims, ok := auth.GetClaims(r.Context())
+	if !ok {
+		h.log.Error("missing_claims", fmt.Errorf("no claims in context"))
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	h.log.WithFields(logger.LogFields{
+		"user_id": claims.UserID,
+		"role":    claims.Role,
+	}).Info("auth_claims_extracted", "JWT claims extracted successfully")
+
+	// Verify the user is a passenger
+	if claims.Role != auth.RolePassenger {
+		h.log.WithFields(logger.LogFields{
+			"user_id": claims.UserID,
+			"role":    claims.Role,
+		}).Error("invalid_role", fmt.Errorf("role %s not allowed", claims.Role))
+		http.Error(w, "Only passengers can create rides", http.StatusForbidden)
+		return
+	}
+
+	passengerID := claims.UserID
+
+	h.log.WithFields(logger.LogFields{
+		"passenger_id": passengerID,
+	}).Info("passenger_verified", "Passenger authentication verified") // Generate ride ID
+	rideID := uuid.MustNewV4().String()
+	correlationID := fmt.Sprintf("req_%d", time.Now().Unix())
+
+	// Calculate fare
+	fare := service.CalculateFare(
+		req.PickupLocation.Latitude,
+		req.PickupLocation.Longitude,
+		req.DestinationLocation.Latitude,
+		req.DestinationLocation.Longitude,
+		req.RideType,
+	)
+
+	// Create ride in database
+	ride := repository.Ride{
+		RideID:        rideID,
+		PassengerID:   passengerID,
+		Status:        "REQUESTED",
+		RideType:      req.RideType,
+		EstimatedFare: fare,
+		RequestedAt:   time.Now(),
+	}
+
+	pickup := repository.Coordinate{
+		RideID:    rideID,
+		Type:      "PICKUP",
+		Latitude:  req.PickupLocation.Latitude,
+		Longitude: req.PickupLocation.Longitude,
+		IsCurrent: true,
+	}
+
+	dest := repository.Coordinate{
+		RideID:    rideID,
+		Type:      "DESTINATION",
+		Latitude:  req.DestinationLocation.Latitude,
+		Longitude: req.DestinationLocation.Longitude,
+		IsCurrent: true,
+	}
+
+	h.log.WithFields(logger.LogFields{
+		"ride_id":        rideID,
+		"passenger_id":   passengerID,
+		"ride_type":      req.RideType,
+		"estimated_fare": fare,
+	}).Info("creating_ride", "Creating ride in database")
+
+	if err := h.repo.CreateRide(r.Context(), ride, pickup, dest); err != nil {
+		h.log.WithFields(logger.LogFields{
+			"ride_id":      rideID,
+			"passenger_id": passengerID,
+			"error":        err.Error(),
+		}).Error("create_ride_failed", err)
+		http.Error(w, "Failed to create ride", http.StatusInternalServerError)
+		return
+	}
+
+	logWithFields := h.log.WithFields(logger.LogFields{
+		"ride_id":        rideID,
+		"correlation_id": correlationID,
+	})
+	logWithFields.Info("ride_created", "Ride request created successfully")
+
+	// Publish to RabbitMQ
+	message := map[string]interface{}{
+		"ride_id":      rideID,
+		"passenger_id": passengerID,
+		"ride_type":    req.RideType,
+		"pickup_location": map[string]float64{
+			"latitude":  req.PickupLocation.Latitude,
+			"longitude": req.PickupLocation.Longitude,
+		},
+		"destination_location": map[string]float64{
+			"latitude":  req.DestinationLocation.Latitude,
+			"longitude": req.DestinationLocation.Longitude,
+		},
+		"estimated_fare": fare,
+		"requested_at":   time.Now(),
+		"correlation_id": correlationID,
+	}
+
+	messageBytes, err := json.Marshal(message)
+	if err != nil {
+		h.log.Error("marshal_message_failed", err)
+	} else {
+		routingKey := fmt.Sprintf("ride.request.%s", req.RideType)
+		if err := h.rabbit.Publish(r.Context(), "ride_topic", routingKey, messageBytes); err != nil {
+			h.log.Error("publish_message_failed", err)
+			// Continue anyway - ride is already created
+		} else {
+			logWithFields.Info("ride_request_published", "Message published to RabbitMQ")
+		}
+	}
+
+	// Return response
+	rideNumber := fmt.Sprintf("RIDE_%s_%s", time.Now().Format("20060102"), rideID[:8])
+	resp := CreateRideResponse{
+		RideID:        rideID,
+		Status:        "REQUESTED",
+		EstimatedFare: fare,
+		RideNumber:    rideNumber,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
+}
+
+func isValidCoordinate(lat, lng float64) bool {
+	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
+
+type CancelRideRequest struct {
+	PassengerID string `json:"passenger_id"`
+}
+
+// CancelRide handles ride cancellation by passengers
+func (h *Handler) CancelRide(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract ride_id from URL path (e.g., /rides/{ride_id}/cancel)
+	rideID := r.PathValue("ride_id")
+	if rideID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "ride_id required"})
+		return
+	}
+
+	var req CancelRideRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Error("parse_cancel_request", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
+
+	// Verify the ride belongs to the passenger
+	ride, err := h.repo.GetRideByPassenger(r.Context(), rideID, req.PassengerID)
+	if err != nil {
+		h.log.Error("get_ride_for_cancellation", err)
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Ride not found"})
+		return
+	}
+
+	// Check if ride can be cancelled (only PENDING or MATCHED rides)
+	if ride.Status != "PENDING" && ride.Status != "MATCHED" {
+		h.log.Error("invalid_status_for_cancellation", fmt.Errorf("status: %s", ride.Status))
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Ride cannot be cancelled"})
+		return
+	}
+
+	// Cancel the ride
+	if err := h.repo.CancelRide(r.Context(), rideID); err != nil {
+		h.log.Error("cancel_ride", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to cancel ride"})
+		return
+	}
+
+	// Publish cancellation message to RabbitMQ if the ride was matched
+	if ride.Status == "MATCHED" {
+		message := map[string]interface{}{
+			"ride_id":      rideID,
+			"passenger_id": req.PassengerID,
+			"status":       "CANCELLED",
+			"cancelled_at": time.Now(),
+		}
+
+		messageBytes, _ := json.Marshal(message)
+		if err := h.rabbit.Publish(r.Context(), "ride_topic", "ride.cancelled."+rideID, messageBytes); err != nil {
+			h.log.Error("publish_cancellation", err)
+		}
+	}
+
+	h.log.WithFields(logger.LogFields{
+		"ride_id": rideID,
+	}).Info("ride_cancelled", "Ride cancelled by passenger")
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "CANCELLED",
+		"ride_id": rideID,
+	})
+}
+
+// GenerateTestToken is a helper endpoint for testing authentication
+// WARNING: This should be removed or secured in production!
+type TokenRequest struct {
+	UserID string `json:"user_id"`
+	Role   string `json:"role"` // PASSANGER, DRIVER, or ADMIN
+}
+
+type TokenResponse struct {
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+	UserID    string `json:"user_id"`
+	Role      string `json:"role"`
+}
+
+func (h *Handler) GenerateTestToken(w http.ResponseWriter, r *http.Request, jwtManager *auth.JWTManager) {
+	var req TokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Default values
+	if req.UserID == "" {
+		req.UserID = "440e8400-e29b-41d4-a716-446655440003"
+	}
+	if req.Role == "" {
+		req.Role = "PASSANGER"
+	}
+
+	// Validate role
+	var role auth.Role
+	switch req.Role {
+	case "PASSENGER":
+		role = auth.RolePassenger
+	case "DRIVER":
+		role = auth.RoleDriver
+	case "ADMIN":
+		role = auth.RoleAdmin
+	default:
+		http.Error(w, "Invalid role. Must be PASSANGER, DRIVER, or ADMIN", http.StatusBadRequest)
+		return
+	}
+
+	// Generate token
+	token, err := jwtManager.GenerateToken(req.UserID, role)
+	if err != nil {
+		h.log.Error("generate_token_failed", err)
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(TokenResponse{
+		Token:     token,
+		ExpiresAt: time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+		UserID:    req.UserID,
+		Role:      req.Role,
+	})
+}

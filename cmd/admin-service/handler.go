@@ -1,12 +1,13 @@
-package main
+package adminservice
 
 import (
 	"context"
 	"database/sql"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"net/http"
 	"ride-hail/pkg/logger"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AdminHandler struct {
@@ -39,6 +40,13 @@ type ActiveRidesResponse struct {
 	TotalCount int          `json:"total_count"`
 	Page       int          `json:"page"`
 	PageSize   int          `json:"page_size"`
+}
+
+func NewAdminHandler(log logger.Logger, pool *pgxpool.Pool) *AdminHandler {
+	return &AdminHandler{
+		log:  log,
+		pool: pool,
+	}
 }
 
 func (h *AdminHandler) getOverviewMetrics(w http.ResponseWriter, r *http.Request) {
