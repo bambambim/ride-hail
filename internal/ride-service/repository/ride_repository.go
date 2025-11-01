@@ -163,11 +163,11 @@ func (r *RideRepository) GetRideByPassenger(ctx context.Context, rideID, passeng
 }
 
 // CancelRide cancels a ride by updating its status
-func (r *RideRepository) CancelRide(ctx context.Context, rideID string) error {
+func (r *RideRepository) CancelRide(ctx context.Context, rideID, reason string) error {
 	_, err := r.db.Exec(ctx, `
 		UPDATE rides 
-		SET status = 'CANCELLED', cancelled_at = $1, updated_at = now() 
-		WHERE id = $2
-	`, time.Now(), rideID)
+		SET status = 'CANCELLED', cancelled_at = $1, updated_at = now(), cancellation_reason = $2 
+		WHERE id = $3
+	`, time.Now(), reason, rideID)
 	return err
 }

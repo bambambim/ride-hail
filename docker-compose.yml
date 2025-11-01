@@ -43,32 +43,32 @@ services:
       retries: 5
 
   # Ride Service
-  ride-service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ridehail-ride-service
-    environment:
-      DB_HOST: 127.0.0.1
-      DB_PORT: 5432
-      DB_USER: ridehail_user
-      DB_PASS: ridehail_pass
-      DB_NAME: ridehail_db
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASS: guest
-      SERVICES_RIDE_SERVICE: 3000
-    ports:
-      - "3000:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - ridehail-network
-    restart: unless-stopped
+  # ride-service:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: ridehail-ride-service
+  #   environment:
+  #     DB_HOST: 127.0.0.1
+  #     DB_PORT: 5432
+  #     DB_USER: ridehail_user
+  #     DB_PASS: ridehail_pass
+  #     DB_NAME: ridehail_db
+  #     RABBITMQ_HOST: rabbitmq
+  #     RABBITMQ_PORT: 5672
+  #     RABBITMQ_USER: guest
+  #     RABBITMQ_PASS: guest
+  #     SERVICES_RIDE_SERVICE: 3000
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     - ridehail-network
+  #   restart: unless-stopped
 
 networks:
   ridehail-network:

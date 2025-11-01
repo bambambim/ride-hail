@@ -38,15 +38,13 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateRideRequest struct {
-	PickupLocation struct {
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
-	} `json:"pickup_location"`
-	DestinationLocation struct {
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
-	} `json:"destination_location"`
-	RideType string `json:"ride_type"`
+	PickupLatitude       float64 `json:"pickup_latitude"`
+	PickupLongitude      float64 `json:"pickup_longitude"`
+	PickupAddress        string  `json:"pickup_address,omitempty"`
+	DestinationLatitude  float64 `json:"destination_latitude"`
+	DestinationLongitude float64 `json:"destination_longitude"`
+	DestinationAddress   string  `json:"destination_address,omitempty"`
+	RideType             string  `json:"ride_type"`
 }
 
 type CreateRideResponse struct {
@@ -73,38 +71,30 @@ func (h *Handler) CreateRide(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.WithFields(logger.LogFields{
-		"pickup_lat": req.PickupLocation.Latitude,
-		"pickup_lng": req.PickupLocation.Longitude,
-		"dest_lat":   req.DestinationLocation.Latitude,
-		"dest_lng":   req.DestinationLocation.Longitude,
+		"pickup_lat": req.PickupLatitude,
+		"pickup_lng": req.PickupLongitude,
+		"dest_lat":   req.DestinationLatitude,
+		"dest_lng":   req.DestinationLongitude,
 		"ride_type":  req.RideType,
 	}).Info("create_ride_request", "Received create ride request")
 
-	// Validate coordinates
-	if !isValidCoordinate(req.PickupLocation.Latitude, req.PickupLocation.Longitude) {
-		http.Error(w, "Invalid pickup coordinates", http.StatusBadRequest)
+	// Validate that coordinates are provided (not zero values)
+	if req.PickupLatitude == 0.0 || req.PickupLongitude == 0.0 {
+		http.Error(w, "Pickup location is required", http.StatusBadRequest)
 		return
 	}
-	if !isValidCoordinate(req.DestinationLocation.Latitude, req.DestinationLocation.Longitude) {
-		http.Error(w, "Invalid destination coordinates", http.StatusBadRequest)
+	if req.DestinationLatitude == 0.0 || req.DestinationLongitude == 0.0 {
+		http.Error(w, "Destination location is required", http.StatusBadRequest)
 		return
 	}
 
-	// Validate coordinates
-	if req.PickupLocation.Latitude < -90 || req.PickupLocation.Latitude > 90 ||
-		req.PickupLocation.Longitude < -180 || req.PickupLocation.Longitude > 180 {
-		h.log.Error("invalid_pickup_coordinates", fmt.Errorf("lat: %f, lng: %f",
-			req.PickupLocation.Latitude, req.PickupLocation.Longitude))
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid pickup coordinates"})
+	// Validate coordinate ranges
+	if !isValidCoordinate(req.PickupLatitude, req.PickupLongitude) {
+		http.Error(w, "Invalid pickup coordinates", http.StatusBadRequest)
 		return
 	}
-	if req.DestinationLocation.Latitude < -90 || req.DestinationLocation.Latitude > 90 ||
-		req.DestinationLocation.Longitude < -180 || req.DestinationLocation.Longitude > 180 {
-		h.log.Error("invalid_destination_coordinates", fmt.Errorf("lat: %f, lng: %f",
-			req.DestinationLocation.Latitude, req.DestinationLocation.Longitude))
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid destination coordinates"})
+	if !isValidCoordinate(req.DestinationLatitude, req.DestinationLongitude) {
+		http.Error(w, "Invalid destination coordinates", http.StatusBadRequest)
 		return
 	}
 
@@ -150,10 +140,10 @@ func (h *Handler) CreateRide(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate fare
 	fare := service.CalculateFare(
-		req.PickupLocation.Latitude,
-		req.PickupLocation.Longitude,
-		req.DestinationLocation.Latitude,
-		req.DestinationLocation.Longitude,
+		req.PickupLatitude,
+		req.PickupLongitude,
+		req.DestinationLatitude,
+		req.DestinationLongitude,
 		req.RideType,
 	)
 
@@ -170,16 +160,16 @@ func (h *Handler) CreateRide(w http.ResponseWriter, r *http.Request) {
 	pickup := repository.Coordinate{
 		RideID:    rideID,
 		Type:      "PICKUP",
-		Latitude:  req.PickupLocation.Latitude,
-		Longitude: req.PickupLocation.Longitude,
+		Latitude:  req.PickupLatitude,
+		Longitude: req.PickupLongitude,
 		IsCurrent: true,
 	}
 
 	dest := repository.Coordinate{
 		RideID:    rideID,
 		Type:      "DESTINATION",
-		Latitude:  req.DestinationLocation.Latitude,
-		Longitude: req.DestinationLocation.Longitude,
+		Latitude:  req.DestinationLatitude,
+		Longitude: req.DestinationLongitude,
 		IsCurrent: true,
 	}
 
@@ -211,13 +201,15 @@ func (h *Handler) CreateRide(w http.ResponseWriter, r *http.Request) {
 		"ride_id":      rideID,
 		"passenger_id": passengerID,
 		"ride_type":    req.RideType,
-		"pickup_location": map[string]float64{
-			"latitude":  req.PickupLocation.Latitude,
-			"longitude": req.PickupLocation.Longitude,
+		"pickup_location": map[string]interface{}{
+			"latitude":  req.PickupLatitude,
+			"longitude": req.PickupLongitude,
+			"address":   req.PickupAddress,
 		},
-		"destination_location": map[string]float64{
-			"latitude":  req.DestinationLocation.Latitude,
-			"longitude": req.DestinationLocation.Longitude,
+		"destination_location": map[string]interface{}{
+			"latitude":  req.DestinationLatitude,
+			"longitude": req.DestinationLongitude,
+			"address":   req.DestinationAddress,
 		},
 		"estimated_fare": fare,
 		"requested_at":   time.Now(),
@@ -256,7 +248,7 @@ func isValidCoordinate(lat, lng float64) bool {
 }
 
 type CancelRideRequest struct {
-	PassengerID string `json:"passenger_id"`
+	Reason string `json:"reason"` // Optional cancellation reason
 }
 
 // CancelRide handles ride cancellation by passengers
@@ -271,16 +263,35 @@ func (h *Handler) CancelRide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse request body (reason is optional)
 	var req CancelRideRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Error("parse_cancel_request", err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		// If body is empty or invalid JSON, continue with empty reason
+		req.Reason = ""
+	}
+
+	// Extract passenger_id from JWT token
+	claims, ok := auth.GetClaims(r.Context())
+	if !ok {
+		h.log.Error("missing_claims", fmt.Errorf("no claims in context"))
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
+	// Verify the user is a passenger
+	if claims.Role != auth.RolePassenger {
+		h.log.WithFields(logger.LogFields{
+			"user_id": claims.UserID,
+			"role":    claims.Role,
+		}).Error("invalid_role", fmt.Errorf("role %s not allowed", claims.Role))
+		http.Error(w, "Only passengers can cancel rides", http.StatusForbidden)
+		return
+	}
+
+	passengerID := claims.UserID
+
 	// Verify the ride belongs to the passenger
-	ride, err := h.repo.GetRideByPassenger(r.Context(), rideID, req.PassengerID)
+	ride, err := h.repo.GetRideByPassenger(r.Context(), rideID, passengerID)
 	if err != nil {
 		h.log.Error("get_ride_for_cancellation", err)
 		w.WriteHeader(http.StatusNotFound)
@@ -288,16 +299,15 @@ func (h *Handler) CancelRide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if ride can be cancelled (only PENDING or MATCHED rides)
-	if ride.Status != "PENDING" && ride.Status != "MATCHED" {
+	if ride.Status == "IN_PROGRESS" || ride.Status == "COMPLETED" || ride.Status == "CANCELLED" {
 		h.log.Error("invalid_status_for_cancellation", fmt.Errorf("status: %s", ride.Status))
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Ride cannot be cancelled"})
 		return
 	}
 
-	// Cancel the ride
-	if err := h.repo.CancelRide(r.Context(), rideID); err != nil {
+	// Cancel the ride with reason
+	if err := h.repo.CancelRide(r.Context(), rideID, req.Reason); err != nil {
 		h.log.Error("cancel_ride", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to cancel ride"})
@@ -308,9 +318,10 @@ func (h *Handler) CancelRide(w http.ResponseWriter, r *http.Request) {
 	if ride.Status == "MATCHED" {
 		message := map[string]interface{}{
 			"ride_id":      rideID,
-			"passenger_id": req.PassengerID,
+			"passenger_id": passengerID,
 			"status":       "CANCELLED",
 			"cancelled_at": time.Now(),
+			"reason":       req.Reason,
 		}
 
 		messageBytes, _ := json.Marshal(message)
@@ -321,12 +332,15 @@ func (h *Handler) CancelRide(w http.ResponseWriter, r *http.Request) {
 
 	h.log.WithFields(logger.LogFields{
 		"ride_id": rideID,
+		"reason":  req.Reason,
 	}).Info("ride_cancelled", "Ride cancelled by passenger")
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "CANCELLED",
-		"ride_id": rideID,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ride_id":      rideID,
+		"status":       "CANCELLED",
+		"cancelled_at": time.Now().Format(time.RFC3339),
+		"message":      "Ride cancelled successfully",
 	})
 }
 
