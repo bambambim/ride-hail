@@ -7,23 +7,23 @@ RUN apk add --no-cache git make gcc musl-dev
 # Set working directory
 WORKDIR /build
 
-# Copy go mod files
+# Copy go mod files from project root
 COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code
+# Copy entire project source
 COPY . .
 
-# Build the service
+# Build the service with correct path
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -o /build/bin/driver-location-service \
     ./services/driver_location_service/cmd/main.go
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.19
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata curl
@@ -38,6 +38,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /build/bin/driver-location-service /app/driver-location-service
 
+# Copy .env.example as fallback (optional)
+COPY --from=builder /build/services/driver_location_service/env.example /app/.env.example
+
 # Change ownership
 RUN chown -R appuser:appuser /app
 
@@ -45,11 +48,11 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 # Expose port
-EXPOSE 8082
+EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8082/health || exit 1
+    CMD curl -f http://localhost:3001/health || exit 1
 
 # Run the service
 ENTRYPOINT ["/app/driver-location-service"]

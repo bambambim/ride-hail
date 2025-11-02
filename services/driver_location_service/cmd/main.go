@@ -27,7 +27,7 @@ func main() {
 	log.Info("startup", "Driver Location Service starting...")
 
 	// Load configuration from .env file
-	cfg, err := config.LoadConfig(".env")
+	cfg, err := config.LoadConfig("../../../.env")
 	if err != nil {
 		log.Error("startup.load_config", err)
 		// If .env file not found, continue with environment variables
