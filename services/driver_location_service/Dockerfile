@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     ./services/driver_location_service/cmd/main.go
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:latest
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata curl

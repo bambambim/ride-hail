@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
+	"ride-hail/pkg/config"
 	"ride-hail/pkg/logger"
 	httpAdapter "ride-hail/services/driver_location_service/internal/adapters/http"
 	"ride-hail/services/driver_location_service/internal/adapters/messaging"
@@ -26,11 +26,27 @@ func main() {
 	log := logger.NewLogger("driver-location-service")
 	log.Info("startup", "Driver Location Service starting...")
 
-	// Load configuration from environment
-	config := loadConfig()
+	// Load configuration from .env file
+	cfg, err := config.LoadConfig(".env")
+	if err != nil {
+		log.Error("startup.load_config", err)
+		// If .env file not found, continue with environment variables
+		log.Info("startup.config", "Continuing with environment variables")
+		cfg = &config.Config{}
+		// Set defaults if env file not found
+		cfg.DB.Host = os.Getenv("DB_HOST")
+		if cfg.DB.Host == "" {
+			cfg.DB.Host = "localhost"
+		}
+	}
+
+	log.Info("startup.config", "Configuration loaded successfully")
+
+	// Build database URL from config
+	databaseURL := buildDatabaseURL(cfg)
 
 	// Initialize database connection
-	dbPool, err := initDatabase(config.DatabaseURL, log)
+	dbPool, err := initDatabase(databaseURL, log)
 	if err != nil {
 		log.Error("startup.init_database", err)
 		os.Exit(1)
@@ -41,8 +57,11 @@ func main() {
 	repo := repository.NewPostgresRepository(dbPool)
 	log.Info("startup.repository", "PostgreSQL repository initialized")
 
+	// Build RabbitMQ URL from config
+	rabbitmqURL := buildRabbitMQURL(cfg)
+
 	// Initialize RabbitMQ message broker
-	messageBroker, err := initMessageBroker(config, log)
+	messageBroker, err := initMessageBroker(rabbitmqURL, log)
 	if err != nil {
 		log.Error("startup.init_message_broker", err)
 		os.Exit(1)
@@ -91,10 +110,16 @@ func main() {
 		Logger:  log,
 	})
 
+	// Get server port from config
+	serverPort := cfg.Services.DriverLocationService
+	if serverPort == 0 {
+		serverPort = 8082 // Default port
+	}
+
 	// Initialize HTTP server
 	serverConfig := httpAdapter.ServerConfig{
-		Host:            config.Host,
-		Port:            config.Port,
+		Host:            "0.0.0.0",
+		Port:            serverPort,
 		ShutdownTimeout: 30 * time.Second,
 		Logger:          log,
 		Handler:         handler,
@@ -102,7 +127,7 @@ func main() {
 
 	server := httpAdapter.NewServer(serverConfig)
 
-	log.Info("startup.complete", fmt.Sprintf("Service ready on %s:%d", config.Host, config.Port))
+	log.Info("startup.complete", fmt.Sprintf("Service ready on %s:%d", serverConfig.Host, serverPort))
 
 	// Start server in goroutine
 	serverErrors := make(chan error, 1)
@@ -138,24 +163,37 @@ func main() {
 	}
 }
 
-// Config holds application configuration
-type Config struct {
-	Host        string
-	Port        int
-	DatabaseURL string
-	RabbitMQURL string
-	LogLevel    string
+// buildDatabaseURL constructs the database URL from config
+func buildDatabaseURL(cfg *config.Config) string {
+	// Check for DATABASE_URL environment variable first (for Docker/cloud deployments)
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		return dbURL
+	}
+
+	// Build from config struct
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		cfg.DB.User,
+		cfg.DB.Password,
+		cfg.DB.Host,
+		cfg.DB.Port,
+		cfg.DB.Database,
+	)
 }
 
-// loadConfig loads configuration from environment variables
-func loadConfig() Config {
-	return Config{
-		Host:        getEnv("HOST", "0.0.0.0"),
-		Port:        getEnvAsInt("PORT", 8082),
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ride_hail?sslmode=disable"),
-		RabbitMQURL: getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
-		LogLevel:    getEnv("LOG_LEVEL", "INFO"),
+// buildRabbitMQURL constructs the RabbitMQ URL from config
+func buildRabbitMQURL(cfg *config.Config) string {
+	// Check for RABBITMQ_URL environment variable first (for Docker/cloud deployments)
+	if rmqURL := os.Getenv("RABBITMQ_URL"); rmqURL != "" {
+		return rmqURL
 	}
+
+	// Build from config struct
+	return fmt.Sprintf("amqp://%s:%s@%s:%d/",
+		cfg.RabbitMQ.User,
+		cfg.RabbitMQ.Password,
+		cfg.RabbitMQ.Host,
+		cfg.RabbitMQ.Port,
+	)
 }
 
 // initDatabase initializes the database connection pool
@@ -191,9 +229,9 @@ func initDatabase(databaseURL string, log logger.Logger) (*pgxpool.Pool, error) 
 }
 
 // initMessageBroker initializes the RabbitMQ message broker
-func initMessageBroker(config Config, log logger.Logger) (ports.MessageBroker, error) {
+func initMessageBroker(rabbitmqURL string, log logger.Logger) (ports.MessageBroker, error) {
 	brokerConfig := messaging.RabbitMQConfig{
-		URL:    config.RabbitMQURL,
+		URL:    rabbitmqURL,
 		Logger: log,
 		Exchanges: messaging.ExchangeConfig{
 			RideTopic:      "ride_topic",
@@ -215,37 +253,4 @@ func initMessageBroker(config Config, log logger.Logger) (ports.MessageBroker, e
 
 	log.Info("messaging.connected", "Successfully connected to RabbitMQ")
 	return broker, nil
-}
-
-// Helper functions
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsInt(key string, defaultValue int) int {
-	valueStr := os.Getenv(key)
-	if valueStr == "" {
-		return defaultValue
-	}
-	value, err := strconv.Atoi(valueStr)
-	if err != nil {
-		return defaultValue
-	}
-	return value
-}
-
-func getEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
-	valueStr := os.Getenv(key)
-	if valueStr == "" {
-		return defaultValue
-	}
-	value, err := time.ParseDuration(valueStr)
-	if err != nil {
-		return defaultValue
-	}
-	return value
 }
