@@ -12,10 +12,13 @@ type DriverLocationService interface {
 	UpdateDriverLocation(driverID string, latitude, longitude float64) error
 	StartRide(driverID string) error
 	EndRide(driverID string) error
-	WebsocketConnect(driverID string) error
 }
 
 type DriverLocationRepository interface {
+	SaveDriverLocation(ctx context.Context, driverID string, latitude, longitude float64) error
+	SaveDriverSession(ctx context.Context, driverID string, sessionID string) error
+	UpdateDriverStatus(ctx context.Context, driverID string, online bool) error
+	FindNearbyDrivers(ctx context.Context, latitude, longitude float64, radiusMeters float64) ([]string, error)
 }
 
 type DriverLocationPublisher interface {
@@ -30,5 +33,8 @@ type DriverLocationSubscriber interface {
 }
 
 type DriverLocationRealtime interface {
-	// WebsocketConnect(driverID string) error
+	ConnectWebsocket(driverID string) error
+	RideOffer(driverID string, latitude, longitude float64) error
+	RideConfirmation(driverID string) error
+	RideResponse(driverID string, accepted bool) error
 }
