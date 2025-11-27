@@ -98,8 +98,9 @@ func main() {
 	// Configure and Start Server
 	// We use a different port, e.g., 3005, or get it from config
 	authPort := os.Getenv("AUTH_SERVICE_PORT")
+
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", authPort),
+		Addr:         fmt.Sprintf(":%s", authPort),
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -108,7 +109,7 @@ func main() {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Info("startup", fmt.Sprintf("Auth service listening on port %d", authPort))
+		log.Info("startup", fmt.Sprintf("Auth service listening on port %s", authPort))
 		serverErrors <- server.ListenAndServe()
 	}()
 
