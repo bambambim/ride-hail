@@ -50,7 +50,7 @@ func main() {
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		jwtSecret = "driver_location_service_secret"
+		jwtSecret = "driver_location_service_secret_a"
 	}
 	jwtMgr := auth.NewJWTManager(jwtSecret, 24*time.Hour)
 

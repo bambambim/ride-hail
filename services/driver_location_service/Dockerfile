@@ -20,7 +20,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -o /build/bin/driver-location-service \
-    ./services/driver_location_service/cmd/main.go
+    ./services/driver_location_service/cmd/driver_location
 
 # Runtime stage
 FROM alpine:3.19
@@ -38,8 +38,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /build/bin/driver-location-service /app/driver-location-service
 
-# Copy .env.example as fallback (optional)
-COPY --from=builder /build/services/driver_location_service/env.example /app/.env.example
+# Ensure an .env file exists so the service's config loader succeeds even if
+# environment variables are injected at runtime.
+RUN touch /app/.env
 
 # Change ownership
 RUN chown -R appuser:appuser /app

@@ -157,7 +157,12 @@ func (c *Connection) SetupTopology() error {
 	}
 
 	queues := []string{
-		"ride_requests", "ride_status", "driver_matching", "driver_response", "driver_status", "location_updates_ride",
+		"ride_requests",
+		"ride_status",
+		"driver_matching",
+		"driver_responses",
+		"driver_status",
+		"location_updates_ride",
 	}
 	for _, queue := range queues {
 		if _, err := ch.QueueDeclare(queue, true, false, false, false, nil); err != nil {
