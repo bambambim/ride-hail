@@ -11,9 +11,9 @@ import (
 )
 
 type PostgresDriverLocationRepository struct {
-	log logger.Logger
-	cfg    *config.Config
-	pool   *pgxpool.Pool
+	log  logger.Logger
+	cfg  *config.Config
+	pool *pgxpool.Pool
 }
 
 func NewPostgresDriverLocationRepository(log logger.Logger, cfg *config.Config) *PostgresDriverLocationRepository {
@@ -22,9 +22,9 @@ func NewPostgresDriverLocationRepository(log logger.Logger, cfg *config.Config) 
 		log.Error("db_connection_failed", err)
 	}
 	return &PostgresDriverLocationRepository{
-		log: log,
-		cfg:    cfg,
-		pool:   pool,
+		log:  log,
+		cfg:  cfg,
+		pool: pool,
 	}
 }
 

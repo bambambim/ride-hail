@@ -3,14 +3,15 @@ package rest
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
+	"ride-hail/pkg/logger"
 	"time"
 )
 
 // Server is a simple HTTP server for driver locations.
 type Server struct {
 	srv *http.Server
+	log logger.Logger
 }
 
 // New creates a new Server listening on addr (e.g. ":8080").
@@ -41,7 +42,7 @@ func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		log.Printf("HTTP server listening on %s", s.srv.Addr)
+		s.log.Info("http_server_start", "Starting HTTP server on address: " + s.srv.Addr)
 		if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
@@ -53,7 +54,7 @@ func (s *Server) Start(ctx context.Context) error {
 		// graceful shutdown
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		log.Println("shutting down HTTP server...")
+		s.log.Info("http_server_shutdown", "Shutting down HTTP server")
 		return s.srv.Shutdown(shutdownCtx)
 	case err := <-errCh:
 		return err

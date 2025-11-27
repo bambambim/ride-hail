@@ -3,6 +3,7 @@ package rest
 import (
 	"encoding/json"
 	"net/http"
+	"ride-hail/pkg/logger"
 	"ride-hail/services/driver_location_service/internal/domain"
 	"strings"
 )
@@ -10,11 +11,12 @@ import (
 // Handler holds dependencies for REST endpoints.
 type Handler struct {
 	driverLocationService domain.DriverLocationService
+	log                   logger.Logger
 }
 
 // NewHandler creates a new REST handler bound to the given port implementation.
-func NewHandler(dls domain.DriverLocationService) *Handler {
-	return &Handler{driverLocationService: dls}
+func NewHandler(dls domain.DriverLocationService, log logger.Logger) *Handler {
+	return &Handler{driverLocationService: dls, log: log}
 }
 
 // RegisterRoutes mounts REST routes on the given router.
@@ -23,7 +25,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// mux.HandleFunc("/drivers/offline", h.HandleOfflineDriver)
 	// mux.HandleFunc("/drivers/update_location", h.HandleUpdateDriverLocation)
 	// mux.HandleFunc("/drivers/start_ride", h.HandleStartRide)
-	// mux.HandleFunc("/drivers/end_ride", h.HandleEndRide)
+	// mux.HandleFunc("/drivers/end_ride", h.HandleCompleteRide)
 	// mux.HandleFunc("/drivers/ws_connect", h.HandleWebsocketConnect)
 }
 
@@ -82,9 +84,9 @@ func (h *Handler) HandleGoOnline(w http.ResponseWriter, r *http.Request) {
 	// }
 
 	resp := onlineResponse{
-		Status:    "AVAILABLE",
+		Status: "AVAILABLE",
 		// SessionID: sessionID,
-		Message:   "You are now online and ready to accept rides",
+		Message: "You are now online and ready to accept rides",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -98,10 +100,10 @@ type offlineSessionSummary struct {
 }
 
 type offlineResponse struct {
-	Status         string                 `json:"status"`
-	SessionID      string                 `json:"session_id"`
-	SessionSummary offlineSessionSummary  `json:"session_summary"`
-	Message        string                 `json:"message"`
+	Status         string                `json:"status"`
+	SessionID      string                `json:"session_id"`
+	SessionSummary offlineSessionSummary `json:"session_summary"`
+	Message        string                `json:"message"`
 }
 
 func (h *Handler) HandleGoOffline(w http.ResponseWriter, r *http.Request) {
@@ -190,10 +192,10 @@ type startRidePayload struct {
 }
 
 type startRideResponse struct {
-	RideID   string `json:"ride_id"`
-	Status   string `json:"status"`
+	RideID    string `json:"ride_id"`
+	Status    string `json:"status"`
 	StartedAt string `json:"started_at"`
-	Message  string `json:"message"`
+	Message   string `json:"message"`
 }
 
 func (h *Handler) HandleStartRide(w http.ResponseWriter, r *http.Request) {
@@ -235,13 +237,13 @@ func (h *Handler) HandleStartRide(w http.ResponseWriter, r *http.Request) {
 }
 
 type completeRidePayload struct {
-	RideID               string `json:"ride_id"`
-	FinalLocation        struct {
+	RideID        string `json:"ride_id"`
+	FinalLocation struct {
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
 	} `json:"final_location"`
-	ActualDistanceKm     float64 `json:"actual_distance_km"`
-	ActualDurationMinutes int    `json:"actual_duration_minutes"`
+	ActualDistanceKm      float64 `json:"actual_distance_km"`
+	ActualDurationMinutes int     `json:"actual_duration_minutes"`
 }
 
 type completeRideResponse struct {

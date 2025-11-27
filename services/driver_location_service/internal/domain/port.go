@@ -7,18 +7,19 @@ import (
 )
 
 type DriverLocationService interface {
-	OnlineDriver(driverID string, latitude, longitude float64) error
-	OfflineDriver(driverID string) error
+	DriverGoOnline(driverID string, latitude, longitude float64) error
+	DriverGoOffline(driverID string) error
 	UpdateDriverLocation(driverID string, latitude, longitude float64) error
 	StartRide(driverID string) error
-	EndRide(driverID string) error
+	CompleteRide(driverID string) error
+	WebSocketConnect(driverID string) error
 }
 
 type DriverLocationRepository interface {
 	SaveDriverLocation(ctx context.Context, driverID string, latitude, longitude float64) error
 	SaveDriverSession(ctx context.Context, driverID string, sessionID string) error
 	UpdateDriverStatus(ctx context.Context, driverID string, online bool) error
-	FindNearbyDrivers(ctx context.Context, latitude, longitude float64, radiusMeters float64) ([]string, error)
+	FindAvailableDrivers(ctx context.Context, latitude, longitude float64, radiusMeters float64) ([]string, error)
 }
 
 type DriverLocationPublisher interface {
