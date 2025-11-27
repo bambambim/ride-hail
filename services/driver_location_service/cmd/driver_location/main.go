@@ -8,6 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"net/http"
+	"strings"
+
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/config"
 	"ride-hail/pkg/logger"
@@ -70,10 +73,34 @@ func main() {
 	}
 
 	handler := rest.NewHandler(service, jwtMgr, log)
+
+	// register function will mount REST routes and websocket route
+	register := func(mux *http.ServeMux) {
+		handler.RegisterRoutes(mux)
+
+		// WebSocket route for drivers: /ws/drivers/{driverID}
+		mux.HandleFunc("/ws/drivers/", func(w http.ResponseWriter, r *http.Request) {
+			// extract driverID from path
+			// path expected: /ws/drivers/{driverID}
+			driverID := strings.TrimPrefix(r.URL.Path, "/ws/drivers/")
+			if driverID == "" {
+				http.Error(w, "driver id required", http.StatusBadRequest)
+				return
+			}
+
+			if err := wsMgr.HandleWebSocket(w, r, driverID); err != nil {
+				log.Error("websocket_handle_failed", err)
+				// If upgrade failed, the manager already logged; return 400
+				http.Error(w, "failed to upgrade websocket", http.StatusBadRequest)
+				return
+			}
+		})
+	}
+
 	server := rest.New(
 		fmt.Sprintf(":%d", cfg.Services.DriverLocationService),
 		log,
-		handler.RegisterRoutes,
+		register,
 	)
 
 	serverErr := make(chan error, 1)
@@ -94,4 +121,3 @@ func main() {
 
 	log.Info("service_shutdown", "Driver location service stopped")
 }
-

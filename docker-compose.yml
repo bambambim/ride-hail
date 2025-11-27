@@ -89,7 +89,7 @@ services:
       RABBITMQ_PASS: guest
 
       # WebSocket configuration
-      WEBSOCKET_PORT: 8080
+      WEBSOCKET_PORT: 3001
     ports:
       - "3001:3001"
     networks:
