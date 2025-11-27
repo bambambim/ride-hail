@@ -1,16 +1,25 @@
 package handler
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"ride-hail/pkg/logger"
-	"ride-hail/pkg/uuid"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// generateUUID generates a UUID v4 string using crypto/rand
+func generateUUID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40 // Version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // Variant RFC4122
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
 
 // CreateUserRequest represents the request to create a new user
 type CreateUserRequest struct {
@@ -84,7 +93,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate user ID
-	userID := uuid.MustNewV4().String()
+	userID := generateUUID()
 
 	// Build attrs JSON
 	attrs := map[string]interface{}{}

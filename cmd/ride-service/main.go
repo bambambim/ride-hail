@@ -9,8 +9,16 @@ import (
 	"syscall"
 	"time"
 
-	"ride-hail/internal/ride-service/consumer"
+	// Clean Architecture imports
+	"ride-hail/internal/ride-service/application"
+	"ride-hail/internal/ride-service/domain"
+	"ride-hail/internal/ride-service/infrastructure/messaging"
+	"ride-hail/internal/ride-service/infrastructure/repository"
+	ridehttp "ride-hail/internal/ride-service/interface/http"
+
+	// Legacy imports (still needed for consumers, users, websocket)
 	"ride-hail/internal/ride-service/handler"
+	"ride-hail/internal/ride-service/infrastructure/consumer"
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/config"
 	"ride-hail/pkg/db"
@@ -52,11 +60,48 @@ func main() {
 	// Initialize WebSocket manager
 	wsManager := websocket.NewManager(log)
 
-	// Initialize handler
+	// Initialize old handler (still needed for users, websocket, and token generation)
 	h := handler.New(dbConn, rabbit, log)
 
-	// Initialize and start message consumers
-	messageConsumer := consumer.New(rabbit, log, wsManager)
+	// ========================================
+	// 🆕 Clean Architecture Setup
+	// ========================================
+
+	// 1. Create Infrastructure (Adapters)
+	rideRepo := repository.NewPostgresRideRepository(dbConn)
+	eventPublisher := messaging.NewRabbitMQEventPublisher(rabbit, log)
+
+	// 2. Create Domain Services
+	fareCalculator := domain.NewFareCalculator()
+
+	// 3. Create Application Use Cases
+	createRideUseCase := application.NewCreateRideUseCase(
+		rideRepo,
+		eventPublisher,
+		fareCalculator,
+		log,
+	)
+	cancelRideUseCase := application.NewCancelRideUseCase(
+		rideRepo,
+		eventPublisher,
+		log,
+	)
+
+	// 4. Create HTTP Handlers (Clean Architecture)
+	rideHandler := ridehttp.NewRideHandler(
+		createRideUseCase,
+		cancelRideUseCase,
+		log,
+	)
+
+	log.Info("clean_architecture_initialized", "Clean Architecture components initialized")
+
+	// ========================================
+	// End Clean Architecture Setup
+	// ========================================
+
+	// Initialize and start message consumers (using new repository)
+	messageConsumer := consumer.New(rabbit, log, wsManager, rideRepo)
 	ctx := context.Background()
 	if err := messageConsumer.StartConsuming(ctx); err != nil {
 		log.Error("consumer_start_failed", err)
@@ -65,22 +110,42 @@ func main() {
 
 	// Setup routes
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", h.Health)
+
+	// CORS middleware function
+	corsHandler := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Allow all origins for development (restrict in production)
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+			// Handle preflight requests
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	mux.Handle("/health", corsHandler(http.HandlerFunc(h.Health)))
 
 	// Public endpoints - User Management
-	mux.HandleFunc("POST /users", h.CreateUser)             // Register new user
-	mux.HandleFunc("GET /users", h.ListUsers)               // List all users
-	mux.HandleFunc("GET /users/{user_id}", h.GetUser)       // Get user by ID
-	mux.HandleFunc("DELETE /users/{user_id}", h.DeleteUser) // Delete user
+	mux.Handle("POST /users", corsHandler(http.HandlerFunc(h.CreateUser)))             // Register new user
+	mux.Handle("GET /users", corsHandler(http.HandlerFunc(h.ListUsers)))               // List all users
+	mux.Handle("GET /users/{user_id}", corsHandler(http.HandlerFunc(h.GetUser)))       // Get user by ID
+	mux.Handle("DELETE /users/{user_id}", corsHandler(http.HandlerFunc(h.DeleteUser))) // Delete user
 
 	// Public endpoint for testing - generates tokens (remove in production!)
-	mux.HandleFunc("POST /auth/token", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("POST /auth/token", corsHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.GenerateTestToken(w, r, jwtManager)
-	})
+	})))
 
 	// Protected endpoints - require JWT authentication
-	mux.Handle("POST /rides", jwtManager.AuthMiddleware(http.HandlerFunc(h.CreateRide)))
-	mux.Handle("POST /rides/{ride_id}/cancel", jwtManager.AuthMiddleware(http.HandlerFunc(h.CancelRide)))
+	// Using Clean Architecture handlers for rides
+	mux.Handle("POST /rides", corsHandler(jwtManager.AuthMiddleware(http.HandlerFunc(rideHandler.CreateRide))))
+	mux.Handle("POST /rides/{ride_id}/cancel", corsHandler(jwtManager.AuthMiddleware(http.HandlerFunc(rideHandler.CancelRide))))
 
 	// WebSocket endpoint for passengers with passenger_id in path
 	mux.HandleFunc("GET /ws/passengers/{passenger_id}", func(w http.ResponseWriter, r *http.Request) {
