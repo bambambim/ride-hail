@@ -15,7 +15,7 @@ type Server struct {
 }
 
 // New creates a new Server listening on addr (e.g. ":8080").
-func New(addr string, register func(mux *http.ServeMux)) *Server {
+func New(addr string, log logger.Logger, register func(mux *http.ServeMux)) *Server {
 	mux := http.NewServeMux()
 
 	// call the handler's registration function
@@ -26,14 +26,13 @@ func New(addr string, register func(mux *http.ServeMux)) *Server {
 	// still register your health endpoint or internal endpoints
 	mux.HandleFunc("/health", healthHandler)
 
-	s := &Server{
+	return &Server{
 		srv: &http.Server{
 			Addr:    addr,
 			Handler: mux,
 		},
+		log: log,
 	}
-
-	return s
 }
 
 // Start runs the server and returns when ctx is cancelled or server fails.

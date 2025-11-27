@@ -13,82 +13,82 @@ import (
 
 type DriverLocationConsumer struct {
 	conn *rabbitmq.Connection
-	repo domain.DriverLocationRepository
+	svc  domain.DriverLocationService
 	log  logger.Logger
 }
 
-func NewDriverLocationConsumer(conn *rabbitmq.Connection, repo domain.DriverLocationRepository, log logger.Logger) *DriverLocationConsumer {
+// NewDriverLocationConsumer wires a driver-location service to the RabbitMQ connection.
+func NewDriverLocationConsumer(conn *rabbitmq.Connection, svc domain.DriverLocationService, log logger.Logger) *DriverLocationConsumer {
 	return &DriverLocationConsumer{
 		conn: conn,
-		repo: repo,
+		svc:  svc,
 		log:  log,
 	}
 }
 
+// ConsumeDriverMatching listens for ride matching requests and forwards them to the application service.
 func (c *DriverLocationConsumer) ConsumeDriverMatching(ctx context.Context) error {
-	// might use context for cancellation or timeout
-	return c.conn.Consume("driver_matching", driverMatchingHandler(c))
+	return c.conn.Consume("driver_matching", c.driverMatchingHandler(ctx))
 }
 
-type DriverMatchingRequest struct {
-	RideID              string   `json:"ride_id"`
-	RideNumber          string   `json:"ride_number"`
-	PickupLocation      Location `json:"pickup_location"`
-	DestinationLocation Location `json:"destination_location"`
-	RideType            string   `json:"ride_type"`
-	EstimatedFare       int64    `json:"estimated_fare"`
-	MaxDistanceKM       int64    `json:"max_distance_km"`
-	TimeoutSeconds      int64    `json:"timeout_seconds"`
-	CorrelationID       string   `json:"correlation_id"`
-}
-
-type Location struct {
-	Lat     float64 `json:"lat"`
-	Lng     float64 `json:"lng"`
-	Address string  `json:"address"`
-}
-
-func driverMatchingHandler(c *DriverLocationConsumer) func(amqp.Delivery) {
+func (c *DriverLocationConsumer) driverMatchingHandler(ctx context.Context) func(amqp.Delivery) {
 	return func(d amqp.Delivery) {
-		var req DriverMatchingRequest
+		handlerCtx := c.baseCtx(ctx)
 
+		var req domain.RideMatchingRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
+			c.log.Error("driver_matching_unmarshal_failed", err)
 			d.Nack(false, false)
 			return
 		}
 
-		// add business logic here
-		// service.MatchDriver(req)
+		if err := c.svc.HandleRideMatchingRequest(handlerCtx, &req); err != nil {
+			c.log.Error("driver_matching_handle_failed", err)
+			d.Nack(false, true)
+			return
+		}
 
 		d.Ack(false)
 	}
 }
 
+// ConsumeRideStatus listens for ride status updates published by the ride service.
 func (c *DriverLocationConsumer) ConsumeRideStatus(ctx context.Context) error {
-	// might use context for cancellation or timeout
-	return c.conn.Consume("ride_status", rideStatusHandler(c))
+	return c.conn.Consume("ride_status", c.rideStatusHandler(ctx))
 }
 
-type RideStatusRequest struct {
+type rideStatusMessage struct {
 	RideID        string    `json:"ride_id"`
 	Status        string    `json:"status"`
 	Timestamp     time.Time `json:"timestamp"`
-	FinalFare     int64     `json:"final_fare"`
+	FinalFare     float64   `json:"final_fare"`
 	CorrelationID string    `json:"correlation_id"`
 }
 
-func rideStatusHandler(c *DriverLocationConsumer) func(amqp.Delivery) {
+func (c *DriverLocationConsumer) rideStatusHandler(ctx context.Context) func(amqp.Delivery) {
 	return func(d amqp.Delivery) {
-		var req RideStatusRequest
+		handlerCtx := c.baseCtx(ctx)
 
-		if err := json.Unmarshal(d.Body, &req); err != nil {
+		var msg rideStatusMessage
+		if err := json.Unmarshal(d.Body, &msg); err != nil {
+			c.log.Error("ride_status_unmarshal_failed", err)
 			d.Nack(false, false)
 			return
 		}
 
-		// add business logic here
-		// service.MatchDriver(req)
+		if err := c.svc.HandleRideStatusUpdate(handlerCtx, msg.RideID, msg.Status, msg.FinalFare); err != nil {
+			c.log.Error("ride_status_handle_failed", err)
+			d.Nack(false, true)
+			return
+		}
 
 		d.Ack(false)
 	}
+}
+
+func (c *DriverLocationConsumer) baseCtx(ctx context.Context) context.Context {
+	if ctx != nil {
+		return ctx
+	}
+	return context.Background()
 }

@@ -89,7 +89,7 @@ func (c *Client) readLoop() {
 		// DATA MESSAGES
 		switch m.Type {
 		case MsgRideResponse:
-			c.hub.handleRideResponse(&m)
+			c.hub.handleRideResponse(c.serviceID, &m)
 		default:
 			fmt.Println("unknown message:", m.Type)
 		}

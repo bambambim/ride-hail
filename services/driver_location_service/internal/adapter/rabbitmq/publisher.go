@@ -23,6 +23,6 @@ func (p *DriverLocationPublisher) PublishDriverStatus(ctx context.Context, excha
 	return p.conn.Publish(ctx, exchange, routingKey, body)
 }
 
-func (p *DriverLocationPublisher) PublishLocationUpdate(ctx context.Context, exchange, routingKey string, body []byte) error {
-	return p.conn.Publish(ctx, exchange, routingKey, body)
+func (p *DriverLocationPublisher) PublishLocationUpdate(ctx context.Context, exchange string, body []byte) error {
+	return p.conn.Publish(ctx, exchange, "", body)
 }

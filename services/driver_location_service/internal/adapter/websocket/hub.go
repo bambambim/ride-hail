@@ -5,9 +5,10 @@ import (
 )
 
 type Hub struct {
-	clients    map[*Client]bool
-	register   chan *Client
-	unregister chan *Client
+	clients             map[*Client]bool
+	register            chan *Client
+	unregister          chan *Client
+	rideResponseHandler func(driverID string, msg *Message)
 }
 
 func NewHub() *Hub {
@@ -62,8 +63,12 @@ func (h *Hub) sendToAll(m Message) {
 
 // =============== INCOMING EVENTS ===================
 
-func (h *Hub) handleRideResponse(m *Message) {
-	// Pass to your business logic service
-	// Example:
-	// driverLocationService.HandleRideResponse(m.Data)
+func (h *Hub) handleRideResponse(driverID string, m *Message) {
+	if h.rideResponseHandler != nil {
+		h.rideResponseHandler(driverID, m)
+	}
+}
+
+func (h *Hub) SetRideResponseHandler(handler func(driverID string, msg *Message)) {
+	h.rideResponseHandler = handler
 }
