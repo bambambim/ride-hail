@@ -97,7 +97,7 @@ func main() {
 
 	// Configure and Start Server
 	// We use a different port, e.g., 3005, or get it from config
-	authPort := 3005 // You should add this to your config
+	authPort := os.Getenv("AUTH_SERVICE_PORT")
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", authPort),
 		Handler:      mux,
