@@ -19,7 +19,7 @@ func main() {
 	log := logger.NewLogger("admin-service")
 	log.Info("startup", "Starting admin service")
 
-	cfg, err := config.LoadConfig(".env")
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Error("startup", fmt.Errorf("Failed to load config: %w", err))
 		os.Exit(1)
