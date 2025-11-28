@@ -35,7 +35,7 @@ services:
   # Shared by all services
   # ============================================
   rabbitmq:
-    image: rabbitmq:3.12-management-alpine
+    image: rabbitmq:4.2.1-management-alpine
     container_name: ridehail-rabbitmq
     hostname: rabbitmq
     environment:
