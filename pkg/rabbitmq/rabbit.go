@@ -3,11 +3,12 @@ package rabbitmq
 import (
 	"context"
 	"fmt"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"ride-hail/pkg/config"
 	"ride-hail/pkg/logger"
 	"sync"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 const (

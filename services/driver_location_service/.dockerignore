@@ -1,8 +1,0 @@
-# IDE
-.idea/
-.vscode/
-.services/driver_location_service/docs/
-.gitignore
-LICENSE
-README.md
-.dockerignore

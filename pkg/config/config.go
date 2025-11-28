@@ -59,6 +59,10 @@ func LoadConfig(filename string) (*Config, error) {
 func loadEnvFile(filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
+		// If .env file doesn't exist, that's OK - use environment variables
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return fmt.Errorf("could not open env file: %w", err)
 	}
 	defer file.Close()
