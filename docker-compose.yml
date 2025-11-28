@@ -103,7 +103,7 @@ services:
   driver-location-service:
     build:
       context: .
-      dockerfile: ./services/driver_location_service/Dockerfile
+      dockerfile: ./internal/driver_location_service/Dockerfile
     container_name: ridehail-driver-location
     environment:
       # Database

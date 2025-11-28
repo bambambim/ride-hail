@@ -1,8 +1,8 @@
 # Build stage
-FROM golang:1.25.3-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git make gcc musl-dev
+RUN apk add --no-cache git
 
 # Set working directory
 WORKDIR /build
@@ -20,7 +20,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -o /build/bin/driver-location-service \
-    ./services/driver_location_service/cmd/driver_location
+    ./cmd/driver_location
 
 # Runtime stage
 FROM alpine:3.19

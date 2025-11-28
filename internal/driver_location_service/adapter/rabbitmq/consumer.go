@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"ride-hail/pkg/logger"
 	"ride-hail/pkg/rabbitmq"
-	"ride-hail/services/driver_location_service/internal/domain"
+	"ride-hail/internal/driver_location_service/domain"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"

@@ -11,15 +11,15 @@ import (
 	"net/http"
 	"strings"
 
+	"ride-hail/internal/driver_location_service/adapter/db"
+	internalRabbit "ride-hail/internal/driver_location_service/adapter/rabbitmq"
+	"ride-hail/internal/driver_location_service/adapter/rest"
+	wsadapter "ride-hail/internal/driver_location_service/adapter/websocket"
+	"ride-hail/internal/driver_location_service/app"
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/config"
 	"ride-hail/pkg/logger"
 	pkgRabbit "ride-hail/pkg/rabbitmq"
-	"ride-hail/services/driver_location_service/internal/adapter/db"
-	internalRabbit "ride-hail/services/driver_location_service/internal/adapter/rabbitmq"
-	"ride-hail/services/driver_location_service/internal/adapter/rest"
-	wsadapter "ride-hail/services/driver_location_service/internal/adapter/websocket"
-	"ride-hail/services/driver_location_service/internal/app"
 )
 
 func main() {

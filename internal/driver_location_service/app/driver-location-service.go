@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"ride-hail/pkg/logger"
-	"ride-hail/services/driver_location_service/internal/domain"
 	"sync"
 	"time"
+
+	"ride-hail/internal/driver_location_service/domain"
+	"ride-hail/pkg/logger"
 )
 
 // DriverLocationService is the application service handling driver location business logic

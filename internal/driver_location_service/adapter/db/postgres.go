@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"ride-hail/pkg/config"
-	"ride-hail/pkg/db"
-	"ride-hail/pkg/logger"
-	"ride-hail/services/driver_location_service/internal/domain"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"ride-hail/internal/driver_location_service/domain"
+	"ride-hail/pkg/config"
+	"ride-hail/pkg/db"
+	"ride-hail/pkg/logger"
 )
 
 type PostgresDriverLocationRepository struct {
