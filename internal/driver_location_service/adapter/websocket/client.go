@@ -9,17 +9,17 @@ import (
 )
 
 const (
-	authTimeout     = 5 * time.Second
-	pingInterval    = 30 * time.Second
-	pongWait        = 60 * time.Second
+	authTimeout  = 5 * time.Second
+	pingInterval = 30 * time.Second
+	pongWait     = 60 * time.Second
 )
 
 type Client struct {
-	conn     *websocket.Conn
-	send     chan []byte
-	hub      *Hub
+	conn          *websocket.Conn
+	send          chan []byte
+	hub           *Hub
 	authenticated bool
-	serviceID string
+	serviceID     string
 }
 
 func newClient(conn *websocket.Conn, hub *Hub) *Client {

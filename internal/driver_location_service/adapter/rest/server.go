@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"ride-hail/pkg/logger"
 	"time"
+
+	"ride-hail/pkg/logger"
 )
 
 // Server is a simple HTTP server for driver locations.
@@ -41,7 +42,7 @@ func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		s.log.Info("http_server_start", "Starting HTTP server on address: " + s.srv.Addr)
+		s.log.Info("http_server_start", "Starting HTTP server on address: "+s.srv.Addr)
 		if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

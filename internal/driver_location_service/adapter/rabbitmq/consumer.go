@@ -3,10 +3,12 @@ package rabbitmq
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
+
+	"ride-hail/internal/driver_location_service/domain"
 	"ride-hail/pkg/logger"
 	"ride-hail/pkg/rabbitmq"
-	"ride-hail/internal/driver_location_service/domain"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -41,7 +43,7 @@ func (c *DriverLocationConsumer) driverMatchingHandler(ctx context.Context) func
 			d.Nack(false, false)
 			return
 		}
-
+		fmt.Println(req)
 		if err := c.svc.HandleRideMatchingRequest(handlerCtx, &req); err != nil {
 			c.log.Error("driver_matching_handle_failed", err)
 			d.Nack(false, true)

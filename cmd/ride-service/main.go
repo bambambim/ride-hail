@@ -55,8 +55,13 @@ func main() {
 	defer rabbit.Close()
 
 	// Initialize JWT manager
-	jwtManager := auth.NewJWTManager("someone", 1*time.Hour)
+	sKey := os.Getenv("JWT_SECRET_KEY")
 
+	if sKey == "" {
+		log.Error("startup", fmt.Errorf("JWT_SECRET_KEY environment variable not set"))
+		sKey = "someone"
+	}
+	jwtManager := auth.NewJWTManager(sKey, 1*time.Hour)
 	// Initialize WebSocket manager
 	wsManager := websocket.NewManager(log)
 
@@ -132,10 +137,10 @@ func main() {
 	mux.Handle("/health", corsHandler(http.HandlerFunc(h.Health)))
 
 	// Public endpoints - User Management
-	mux.Handle("POST /users", corsHandler(http.HandlerFunc(h.CreateUser)))             // Register new user
-	mux.Handle("GET /users", corsHandler(http.HandlerFunc(h.ListUsers)))               // List all users
-	mux.Handle("GET /users/{user_id}", corsHandler(http.HandlerFunc(h.GetUser)))       // Get user by ID
-	mux.Handle("DELETE /users/{user_id}", corsHandler(http.HandlerFunc(h.DeleteUser))) // Delete user
+	// mux.Handle("POST /users", corsHandler(http.HandlerFunc(h.CreateUser)))             // Register new user
+	// mux.Handle("GET /users", corsHandler(http.HandlerFunc(h.ListUsers)))               // List all users
+	// mux.Handle("GET /users/{user_id}", corsHandler(http.HandlerFunc(h.GetUser)))       // Get user by ID
+	// mux.Handle("DELETE /users/{user_id}", corsHandler(http.HandlerFunc(h.DeleteUser))) // Delete user
 
 	// Public endpoint for testing - generates tokens (remove in production!)
 	mux.Handle("POST /auth/token", corsHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

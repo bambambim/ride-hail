@@ -268,29 +268,28 @@ func (r *PostgresDriverLocationRepository) GetLastLocationUpdate(ctx context.Con
 // FindNearbyDrivers finds drivers within radius using PostGIS
 func (r *PostgresDriverLocationRepository) FindNearbyDrivers(ctx context.Context, latitude, longitude float64, vehicleType string, radiusMeters float64, limit int) ([]*domain.NearbyDriver, error) {
 	query := `
-		SELECT d.id, u.email, d.rating, d.vehicle_type, d.vehicle_attrs,
-		       c.latitude, c.longitude,
-		       ST_Distance(
-		         ST_MakePoint(c.longitude, c.latitude)::geography,
-		         ST_MakePoint($1, $2)::geography
-		       ) / 1000 as distance_km
-		FROM drivers d
-		JOIN users u ON d.id = u.id
-		JOIN coordinates c ON c.entity_id = d.id
-		  AND c.entity_type = 'driver'
-		  AND c.is_current = true
-		WHERE d.status = $3
-		  AND d.vehicle_type = $4
-		  AND ST_DWithin(
-		        ST_MakePoint(c.longitude, c.latitude)::geography,
-		        ST_MakePoint($1, $2)::geography,
-		        $5
-		      )
-		ORDER BY distance_km ASC, d.rating DESC
-		LIMIT $6
+		SELECT d.id, u.email, d.rating, c.latitude, c.longitude,
+       ST_Distance(
+         ST_MakePoint(c.longitude, c.latitude)::geography,
+         ST_MakePoint($2, $1)::geography
+       ) / 1000 as distance_km
+FROM drivers d
+JOIN users u ON d.id = u.id
+JOIN coordinates c ON c.entity_id = d.id
+  AND c.entity_type = 'driver'
+  AND c.is_current = true
+WHERE d.status = 'AVAILABLE'
+  AND d.vehicle_type = $3
+  AND ST_DWithin(
+        ST_MakePoint(c.longitude, c.latitude)::geography,
+        ST_MakePoint( $2, $1)::geography,
+        5000  -- 5km radius
+      )
+ORDER BY distance_km, d.rating DESC
+LIMIT 10
 	`
-
-	rows, err := r.pool.Query(ctx, query, longitude, latitude, domain.DriverStatusAvailable, vehicleType, radiusMeters, limit)
+	fmt.Println(longitude, latitude)
+	rows, err := r.pool.Query(ctx, query, latitude, longitude, vehicleType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find nearby drivers: %w", err)
 	}
@@ -302,8 +301,8 @@ func (r *PostgresDriverLocationRepository) FindNearbyDrivers(ctx context.Context
 		var vehicleAttrsJSON []byte
 
 		err := rows.Scan(
-			&driver.DriverID, &driver.Email, &driver.Rating, &driver.VehicleType,
-			&vehicleAttrsJSON, &driver.Latitude, &driver.Longitude, &driver.DistanceKm,
+			&driver.DriverID, &driver.Email, &driver.Rating,
+			&driver.Latitude, &driver.Longitude, &driver.DistanceKm,
 		)
 		if err != nil {
 			r.log.Error("scan_nearby_driver_failed", err)
@@ -323,7 +322,7 @@ func (r *PostgresDriverLocationRepository) FindNearbyDrivers(ctx context.Context
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating nearby drivers: %w", err)
 	}
-
+	fmt.Println(drivers)
 	return drivers, nil
 }
 

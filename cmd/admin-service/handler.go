@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
-	"ride-hail/pkg/logger"
 	"time"
+
+	"ride-hail/pkg/logger"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

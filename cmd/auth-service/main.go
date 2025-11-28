@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/config"
@@ -68,6 +69,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 		Message: message,
 	})
 }
+
 func main() {
 	log := logger.NewLogger("auth-service")
 	log.Info("startup", "Starting auth-service")
@@ -86,7 +88,12 @@ func main() {
 	defer pool.Close()
 
 	// Initialize JWTManager
-	jwtManager := auth.NewJWTManager("someone", time.Hour)
+	sKey := os.Getenv("JWT_SECRET_KEY")
+	if sKey == "" {
+		log.Error("startup", fmt.Errorf("JWT_SECRET_KEY environment variable not set"))
+		sKey = "someone"
+	}
+	jwtManager := auth.NewJWTManager(sKey, 1*time.Hour)
 
 	// Setup HTTP Server and Handlers
 	mux := http.NewServeMux()
@@ -204,7 +211,6 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO users (email, role, password_hash) VALUES ($1, $2, $3) RETURNING id`,
 		req.Email, role, plainTextPassword, // Storing plain text
 	).Scan(&userID)
-
 	if err != nil {
 		// Check for duplicate email
 		var pgErr *pgconn.PgError
@@ -282,7 +288,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, password_hash, role FROM users WHERE email = $1 AND status = 'ACTIVE'`,
 		req.Email,
 	).Scan(&userID, &storedPassword, &userRole)
-
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			log.Error("login_user_not_found", err)

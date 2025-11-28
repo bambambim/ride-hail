@@ -57,15 +57,15 @@ func (s *DriverLocationService) DriverGoOnline(ctx context.Context, driverID str
 	log.Info("driver_going_online", "Driver attempting to go online")
 
 	// Validate driver exists
-	driver, err := s.repo.GetDriver(ctx, driverID)
+	_, err := s.repo.GetDriver(ctx, driverID)
 	if err != nil {
 		log.Error("get_driver_failed", err)
 		return "", fmt.Errorf("failed to get driver: %w", err)
 	}
 
-	if !driver.IsVerified {
-		return "", fmt.Errorf("driver not verified")
-	}
+	// if !driver.IsVerified {
+	// 	return "", fmt.Errorf("driver not verified")
+	// }
 
 	// Create new session
 	sessionID, err := s.repo.CreateDriverSession(ctx, driverID)

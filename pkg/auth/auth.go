@@ -64,7 +64,6 @@ func (m *JWTManager) ParseToken(tokenString string) (*AppClaims, error) {
 		return m.secretKey, nil
 	},
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed toparse token: %w", err)
 	}
@@ -72,6 +71,7 @@ func (m *JWTManager) ParseToken(tokenString string) (*AppClaims, error) {
 	if claims, ok := token.Claims.(*AppClaims); ok && token.Valid {
 		return claims, nil
 	}
+
 	return nil, fmt.Errorf("invalid token")
 }
 
@@ -97,7 +97,6 @@ func (m *JWTManager) AuthMiddleware(next http.Handler) http.Handler {
 
 		ctx := context.WithValue(r.Context(), claimsKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
-
 	})
 }
 
@@ -107,6 +106,7 @@ func GetClaims(ctx context.Context) (*AppClaims, bool) {
 	claims, ok := ctx.Value(claimsKey).(*AppClaims)
 	return claims, ok
 }
+
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -114,5 +114,4 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 		"error":   http.StatusText(code),
 		"message": msg,
 	})
-
 }

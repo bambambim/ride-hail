@@ -1,8 +1,9 @@
 package websocket
 
 import (
-	"ride-hail/pkg/logger"
 	"sync"
+
+	"ride-hail/pkg/logger"
 )
 
 // Manager manages WebSocket connections for passengers and drivers

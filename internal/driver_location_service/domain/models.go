@@ -46,8 +46,8 @@ type Coordinate struct {
 
 // Location represents a latitude/longitude pair with optional address metadata.
 type Location struct {
-	Lat     float64 `json:"lat"`
-	Lng     float64 `json:"lng"`
+	Lat     float64 `json:"latitude"`
+	Lng     float64 `json:"longitude"`
 	Address string  `json:"address,omitempty"`
 }
 

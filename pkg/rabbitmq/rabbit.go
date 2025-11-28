@@ -3,10 +3,11 @@ package rabbitmq
 import (
 	"context"
 	"fmt"
-	"ride-hail/pkg/config"
-	"ride-hail/pkg/logger"
 	"sync"
 	"time"
+
+	"ride-hail/pkg/config"
+	"ride-hail/pkg/logger"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -60,6 +61,7 @@ func NewConnection(cfg *config.Config, log logger.Logger) (*Connection, error) {
 	}
 	return nil, fmt.Errorf("failed to connect to RabbitMQ after %d retries: %w", maxRetries, err)
 }
+
 func (c *Connection) connect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -82,6 +84,7 @@ func (c *Connection) connect() error {
 	c.logger.Info("rabbitmq_connect_internal", "Connection and publisher channel established")
 	return nil
 }
+
 func (c *Connection) reconnectLoop() {
 	c.logger.Info("rabbitmq_reconnect_loop", "Starting reconnection loop")
 	for {

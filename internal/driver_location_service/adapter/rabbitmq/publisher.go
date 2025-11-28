@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"context"
+
 	"ride-hail/pkg/rabbitmq"
 )
 

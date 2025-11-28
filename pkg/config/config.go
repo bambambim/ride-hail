@@ -53,7 +53,6 @@ func LoadConfig(filename string) (*Config, error) {
 	cfg.Services.AdminService = getEnvAsInt("ADMIN_SERVICE", 3004)
 
 	return cfg, nil
-
 }
 
 func loadEnvFile(filename string) error {

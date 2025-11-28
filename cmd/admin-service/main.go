@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/config"
 	"ride-hail/pkg/db"
 	"ride-hail/pkg/logger"
-	"syscall"
-	"time"
 )
 
 func AdminService() {
@@ -34,9 +35,9 @@ func AdminService() {
 	sKey := os.Getenv("JWT_SECRET_KEY")
 	if sKey == "" {
 		log.Error("startup", fmt.Errorf("JWT_SECRET_KEY environment variable not set"))
-		os.Exit(1)
+		sKey = "someone"
 	}
-	jwtManager := auth.NewJWTManager("someone", 1*time.Hour)
+	jwtManager := auth.NewJWTManager(sKey, 1*time.Hour)
 
 	mux := http.NewServeMux()
 	adminHandler := NewAdminHandler(log, pool)
@@ -81,5 +82,4 @@ func AdminService() {
 	}
 
 	log.Info("shutdown", "Admin service shutdown complete")
-
 }

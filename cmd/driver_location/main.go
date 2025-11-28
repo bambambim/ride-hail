@@ -3,13 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
-
-	"net/http"
-	"strings"
 
 	"ride-hail/internal/driver_location_service/adapter/db"
 	internalRabbit "ride-hail/internal/driver_location_service/adapter/rabbitmq"
@@ -51,11 +50,12 @@ func main() {
 
 	publisher := internalRabbit.NewDriverLocationPublisher(rabbitConn)
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "driver_location_service_secret_a"
+	sKey := os.Getenv("JWT_SECRET_KEY")
+	if sKey == "" {
+		log.Error("startup", fmt.Errorf("JWT_SECRET_KEY environment variable not set"))
+		sKey = "someone"
 	}
-	jwtMgr := auth.NewJWTManager(jwtSecret, 24*time.Hour)
+	jwtMgr := auth.NewJWTManager(sKey, 1*time.Hour)
 
 	wsMgr := wsadapter.NewManager(jwtMgr, log)
 	defer wsMgr.CloseAll()

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/logger"
 )
@@ -24,6 +25,5 @@ func adminOnly(log logger.Logger, next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r)
-
 	})
 }

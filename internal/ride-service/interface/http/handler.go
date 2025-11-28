@@ -101,7 +101,6 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 		DestinationAddress:   req.DestinationAddress,
 		RideType:             req.RideType,
 	}
-
 	// 4. Execute use case (business logic is here)
 	result, err := h.createRideUseCase.Execute(r.Context(), cmd)
 	if err != nil {

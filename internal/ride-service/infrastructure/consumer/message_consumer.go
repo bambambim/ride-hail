@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"ride-hail/internal/ride-service/infrastructure/repository"
@@ -46,7 +47,7 @@ type DriverStatusMessage struct {
 	RideID      string    `json:"ride_id,omitempty"`
 	PassengerID string    `json:"passenger_id,omitempty"` // Added for WebSocket notification
 	OldStatus   string    `json:"old_status"`
-	NewStatus   string    `json:"new_status"`
+	NewStatus   string    `json:"status"`
 	Latitude    float64   `json:"latitude,omitempty"`
 	Longitude   float64   `json:"longitude,omitempty"`
 	Timestamp   time.Time `json:"timestamp"`
@@ -91,7 +92,6 @@ func (c *RideConsumer) consumeDriverResponses(ctx context.Context) {
 		c.handleDriverResponse(ctx, msg.Body)
 		msg.Ack(false)
 	})
-
 	if err != nil {
 		c.log.Error("consume_driver_responses_failed", err)
 	}
@@ -117,7 +117,7 @@ func (c *RideConsumer) handleDriverResponse(ctx context.Context, body []byte) {
 			c.log.WithFields(logger.LogFields{
 				"ride_id": response.RideID,
 				"error":   err.Error(),
-			}).Error("update_ride_status_failed", err)
+			}).Error("update_ride_status_failed to matched", err)
 			// Continue with WebSocket notification even if DB update fails
 		}
 
@@ -180,7 +180,6 @@ func (c *RideConsumer) consumeDriverStatus(ctx context.Context) {
 		c.handleDriverStatus(ctx, msg.Body)
 		msg.Ack(false)
 	})
-
 	if err != nil {
 		c.log.Error("consume_driver_status_failed", err)
 	}
@@ -222,6 +221,7 @@ func (c *RideConsumer) handleDriverStatus(ctx context.Context, body []byte) {
 
 	// Update ride status in database if we have a valid ride_id
 	if status.RideID != "" {
+		fmt.Println(status.NewStatus, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 		if err := c.repo.UpdateRideStatus(ctx, status.RideID, rideStatus); err != nil {
 			c.log.WithFields(logger.LogFields{
 				"ride_id": status.RideID,
@@ -274,7 +274,6 @@ func (c *RideConsumer) consumeLocationUpdates(ctx context.Context) {
 		c.handleLocationUpdate(ctx, msg.Body)
 		msg.Ack(false)
 	})
-
 	if err != nil {
 		c.log.Error("consume_location_updates_failed", err)
 	}

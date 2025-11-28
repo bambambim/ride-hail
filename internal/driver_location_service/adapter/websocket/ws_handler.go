@@ -34,7 +34,7 @@ type client struct {
 	conn Conn
 	send chan []byte
 
-	closed   chan struct{}
+	closed    chan struct{}
 	closeOnce sync.Once
 }
 
@@ -73,7 +73,11 @@ func WithWriteTimeout(d time.Duration) Option {
 
 // WithSendBuffer sets the per-client send channel buffer size.
 func WithSendBuffer(n int) Option {
-	return func(h *Handler) { if n > 0 { h.sendBuf = n } }
+	return func(h *Handler) {
+		if n > 0 {
+			h.sendBuf = n
+		}
+	}
 }
 
 // Register registers a new client and starts read/write pumps.
@@ -85,9 +89,9 @@ func (h *Handler) Register(ctx context.Context, id string, conn Conn) error {
 		return ErrClientExists
 	}
 	c := &client{
-		id:    id,
-		conn:  conn,
-		send:  make(chan []byte, h.sendBuf),
+		id:     id,
+		conn:   conn,
+		send:   make(chan []byte, h.sendBuf),
 		closed: make(chan struct{}),
 	}
 	h.clients[id] = c

@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"ride-hail/pkg/auth"
-	"ride-hail/pkg/logger"
 	"strings"
 	"sync"
+
+	"ride-hail/pkg/auth"
+	"ride-hail/pkg/logger"
 
 	"github.com/gorilla/websocket"
 )

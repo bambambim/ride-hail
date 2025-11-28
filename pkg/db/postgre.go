@@ -3,10 +3,11 @@ package db
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"ride-hail/pkg/config"
 	"ride-hail/pkg/logger"
-	"time"
 )
 
 const (
@@ -47,5 +48,4 @@ func NewConnection(cfg *config.Config, log logger.Logger) (*pgxpool.Pool, error)
 	}
 
 	return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", maxRetries, err)
-
 }
