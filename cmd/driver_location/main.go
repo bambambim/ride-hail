@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -33,7 +32,6 @@ func main() {
 		log.Error("config_load_failed", err)
 		os.Exit(1)
 	}
-	log.Info("config_loaded", "Configuration loaded successfully: " + cfg.TestVariable)
 
 	repo, err := db.NewPostgresDriverLocationRepository(log, cfg)
 	if err != nil {
@@ -58,10 +56,14 @@ func main() {
 	}
 	jwtMgr := auth.NewJWTManager(sKey, 1*time.Hour)
 
-	wsMgr := wsadapter.NewManager(jwtMgr, log)
-	defer wsMgr.CloseAll()
+	wsAdapter := wsadapter.NewDriverWSAdapter(log, jwtMgr)
 
-	service := app.NewDriverLocationService(log, repo, publisher, wsMgr)
+	// 2. Initialize the Service injecting the adapter
+	service := app.NewDriverLocationService(log, repo, publisher, wsAdapter)
+
+	// 3. Register WebSocket Message Handlers
+	// This connects incoming WS messages to the Service logic
+	wsAdapter.SetService(service)
 
 	consumer := internalRabbit.NewDriverLocationConsumer(rabbitConn, service, log)
 	if err := consumer.ConsumeDriverMatching(ctx); err != nil {
@@ -79,23 +81,9 @@ func main() {
 	register := func(mux *http.ServeMux) {
 		handler.RegisterRoutes(mux)
 
-		// WebSocket route for drivers: /ws/drivers/{driverID}
-		mux.HandleFunc("/ws/drivers/", func(w http.ResponseWriter, r *http.Request) {
-			// extract driverID from path
-			// path expected: /ws/drivers/{driverID}
-			driverID := strings.TrimPrefix(r.URL.Path, "/ws/drivers/")
-			if driverID == "" {
-				http.Error(w, "driver id required", http.StatusBadRequest)
-				return
-			}
-
-			if err := wsMgr.HandleWebSocket(w, r, driverID); err != nil {
-				log.Error("websocket_handle_failed", err)
-				// If upgrade failed, the manager already logged; return 400
-				http.Error(w, "failed to upgrade websocket", http.StatusBadRequest)
-				return
-			}
-		})
+		// WebSocket route for drivers
+		// Note the trailing slash: This enables matching /ws/drivers/{driverID}
+		mux.HandleFunc("/ws/drivers/", wsAdapter.ServeHTTP)
 	}
 
 	server := rest.New(
