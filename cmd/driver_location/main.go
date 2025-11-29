@@ -33,6 +33,7 @@ func main() {
 		log.Error("config_load_failed", err)
 		os.Exit(1)
 	}
+	log.Info("config_loaded", "Configuration loaded successfully: " + cfg.TestVariable)
 
 	repo, err := db.NewPostgresDriverLocationRepository(log, cfg)
 	if err != nil {

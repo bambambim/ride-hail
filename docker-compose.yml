@@ -63,21 +63,22 @@ services:
   ride-service:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./internal/ride-service/Dockerfile
     container_name: ridehail-ride-service
+
+    env_file:
+      - .env
+
     environment:
-      # Database
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ridehail_user
       DB_PASS: ridehail_pass
       DB_NAME: ridehail_db
-      # RabbitMQ
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASS: guest
-      # Service
       RIDE_SERVICE_PORT: 3000
     ports:
       - "3000:3000"
@@ -105,19 +106,20 @@ services:
       context: .
       dockerfile: ./internal/driver_location_service/Dockerfile
     container_name: ridehail-driver-location
+
+    env_file:
+      - .env
+
     environment:
-      # Database
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ridehail_user
       DB_PASS: ridehail_pass
       DB_NAME: ridehail_db
-      # RabbitMQ
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASS: guest
-      # Service
       DRIVER_LOCATION_SERVICE_PORT: 3001
     ports:
       - "3001:3001"

@@ -30,6 +30,7 @@ type Config struct {
 		DriverLocationService int
 		AdminService          int
 	}
+	TestVariable string
 }
 
 func LoadConfig(filename string) (*Config, error) {
@@ -51,6 +52,7 @@ func LoadConfig(filename string) (*Config, error) {
 	cfg.Services.RideService = getEnvAsInt("SERVICES_RIDE_SERVICE", 3000)
 	cfg.Services.DriverLocationService = getEnvAsInt("DRIVER_LOCATION_SERVICE", 3001)
 	cfg.Services.AdminService = getEnvAsInt("ADMIN_SERVICE", 3004)
+	cfg.TestVariable = getEnv("TEST_VARIABLE", "default_value")
 
 	return cfg, nil
 }

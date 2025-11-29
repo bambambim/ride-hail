@@ -38,6 +38,7 @@ func main() {
 	log := logger.NewLogger("ride-service")
 	log.Info("service_starting", "Ride Service starting on port 3000")
 
+	log.Info("config_loaded", "Configuration loaded successfully: "+cfg.TestVariable)
 	// Connect to database
 	dbConn, err := db.NewConnection(cfg, log)
 	if err != nil {
