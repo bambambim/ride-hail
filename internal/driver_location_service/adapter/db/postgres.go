@@ -339,6 +339,23 @@ func (r *PostgresDriverLocationRepository) ClearDriverCurrentRide(ctx context.Co
 	return r.UpdateDriverStatus(ctx, driverID, domain.DriverStatusAvailable)
 }
 
+func (r *PostgresDriverLocationRepository) GetEstimatedFare(ctx context.Context, rideID string) (float64, error) {
+	query := `
+		SELECT estimated_fare
+		FROM rides
+		WHERE id = $1
+	`
+	var fare float64
+	err := r.pool.QueryRow(ctx, query, rideID).Scan(&fare)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("failed to get estimated fare: %w", err)
+	}
+	return fare, nil
+}
+
 // Close releases the underlying database pool.
 func (r *PostgresDriverLocationRepository) Close() {
 	if r.pool != nil {

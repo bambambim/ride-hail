@@ -32,6 +32,9 @@ type DriverLocationRepository interface {
 	// Ride tracking
 	SetDriverCurrentRide(ctx context.Context, driverID string, rideID string) error
 	ClearDriverCurrentRide(ctx context.Context, driverID string) error
+	
+	
+	GetEstimatedFare(ctx context.Context, rideID string) (float64, error)
 }
 
 // DriverLocationService exposes the business operations used by adapters.

@@ -182,7 +182,7 @@ func (s *DriverLocationService) UpdateDriverLocation(ctx context.Context, driver
 	locationUpdate := map[string]interface{}{
 		"driver_id":       driverID,
 		"ride_id":         rideID,
-		"location":        map[string]float64{"lat": latitude, "lng": longitude},
+		"location":        map[string]float64{"latitude": latitude, "longitude": longitude},
 		"speed_kmh":       speed,
 		"heading_degrees": heading,
 		"timestamp":       time.Now().Format(time.RFC3339),
@@ -407,8 +407,8 @@ func (s *DriverLocationService) sendDriverResponse(ctx context.Context, rideID, 
 			location, _ := s.repo.GetCurrentLocation(ctx, driverID)
 			if location != nil {
 				response["driver_location"] = map[string]float64{
-					"lat": location.Latitude,
-					"lng": location.Longitude,
+					"latitude": location.Latitude,
+					"longitude": location.Longitude,
 				}
 				response["estimated_arrival_minutes"] = 3 // Placeholder
 			}
@@ -456,10 +456,16 @@ func (s *DriverLocationService) CompleteRide(ctx context.Context, driverID strin
 
 	// Calculate earnings (80% of fare)
 	// In real implementation, would fetch actual fare from ride service
-	earnings := 1216.0 // Placeholder
+	// earnings := 1216.0 // Placeholder
+	earnings, err := s.repo.GetEstimatedFare(ctx, rideID)
+	if err != nil {
+		log.Error("get_fare_failed", err)
+		return 0, fmt.Errorf("failed to get fare: %w", err)
+	}
+	earnings = earnings * 0.8
 
 	// Update session stats
-	err := s.repo.UpdateDriverSessionStats(ctx, driverID, 1, earnings)
+	err = s.repo.UpdateDriverSessionStats(ctx, driverID, 1, earnings)
 	if err != nil {
 		log.Error("update_stats_failed", err)
 	}
