@@ -32,8 +32,7 @@ type DriverLocationRepository interface {
 	// Ride tracking
 	SetDriverCurrentRide(ctx context.Context, driverID string, rideID string) error
 	ClearDriverCurrentRide(ctx context.Context, driverID string) error
-	
-	
+
 	GetEstimatedFare(ctx context.Context, rideID string) (float64, error)
 }
 
@@ -45,7 +44,7 @@ type DriverLocationService interface {
 	StartRide(ctx context.Context, driverID, rideID string) error
 	CompleteRide(ctx context.Context, driverID, rideID string, actualDistanceKM float64, actualDurationMin int) (float64, error)
 	HandleRideMatchingRequest(ctx context.Context, req *RideMatchingRequest) error
-	HandleRideStatusUpdate(ctx context.Context, rideID string, status string, finalFare float64) error
+	HandleRideStatusUpdate(ctx context.Context, rideID string, driverID string, status string, finalFare float64) error
 	HandleDriverRideResponse(ctx context.Context, driverID, offerID, rideID string, accepted bool) error
 }
 
@@ -66,6 +65,7 @@ type DriverLocationSubscriber interface {
 type WebSocketManager interface {
 	SendRideOffer(driverID string, offer interface{}) error
 	SendRideDetails(driverID string, details interface{}) error
+	SendRideCancelled(driverID string, rideID string) error
 	BroadcastToAll(message interface{}) error
 	IsDriverConnected(driverID string) bool
 }

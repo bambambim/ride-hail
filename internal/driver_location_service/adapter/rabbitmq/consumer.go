@@ -65,6 +65,7 @@ type rideStatusMessage struct {
 	Timestamp     time.Time `json:"timestamp"`
 	FinalFare     float64   `json:"final_fare"`
 	CorrelationID string    `json:"correlation_id"`
+	DriverID      string    `json:"driver_id"`
 }
 
 func (c *DriverLocationConsumer) rideStatusHandler(ctx context.Context) func(amqp.Delivery) {
@@ -78,7 +79,7 @@ func (c *DriverLocationConsumer) rideStatusHandler(ctx context.Context) func(amq
 			return
 		}
 
-		if err := c.svc.HandleRideStatusUpdate(handlerCtx, msg.RideID, msg.Status, msg.FinalFare); err != nil {
+		if err := c.svc.HandleRideStatusUpdate(handlerCtx, msg.RideID, msg.DriverID, msg.Status, msg.FinalFare); err != nil {
 			c.log.Error("ride_status_handle_failed", err)
 			d.Nack(false, true)
 			return

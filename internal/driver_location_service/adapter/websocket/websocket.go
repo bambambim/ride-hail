@@ -156,6 +156,16 @@ func (a *DriverWSAdapter) SendRideDetails(driverID string, details interface{}) 
 	}
 	return a.manager.SendToUser(driverID, msg)
 }
+func (a *DriverWSAdapter) SendRideCancelled(driverID string, rideID string) error {
+	msg := map[string]interface{}{
+		"type": "ride_cancelled",
+		"data": map[string]string{
+			"ride_id": rideID,
+			"message": "Ride cancelled by passenger",
+		},
+	}
+	return a.manager.SendToUser(driverID, msg)
+}
 
 func (a *DriverWSAdapter) BroadcastToAll(message interface{}) error {
 	a.manager.Broadcast(message)

@@ -407,7 +407,7 @@ func (s *DriverLocationService) sendDriverResponse(ctx context.Context, rideID, 
 			location, _ := s.repo.GetCurrentLocation(ctx, driverID)
 			if location != nil {
 				response["driver_location"] = map[string]float64{
-					"latitude": location.Latitude,
+					"latitude":  location.Latitude,
 					"longitude": location.Longitude,
 				}
 				response["estimated_arrival_minutes"] = 3 // Placeholder
@@ -494,15 +494,46 @@ func (s *DriverLocationService) CompleteRide(ctx context.Context, driverID strin
 }
 
 // HandleRideStatusUpdate processes ride status updates from ride service
-func (s *DriverLocationService) HandleRideStatusUpdate(ctx context.Context, rideID string, status string, finalFare float64) error {
-	log := s.log.WithFields(logger.LogFields{"ride_id": rideID})
+func (s *DriverLocationService) HandleRideStatusUpdate(ctx context.Context, rideID string, driverID string, status string, finalFare float64) error {
+	log := s.log.WithFields(logger.LogFields{"ride_id": rideID, "driver_id": driverID})
 	log.Info("ride_status_update", fmt.Sprintf("Ride status changed to %s", status))
 
 	// Handle different statuses
 	switch status {
 	case "CANCELLED":
-		// Free up the driver if they were assigned
 		log.Info("ride_cancelled", "Ride was cancelled")
+
+		// Only act if we have a valid driver ID
+		if driverID != "" {
+			// 1. Update driver status back to AVAILABLE
+			if err := s.repo.UpdateDriverStatus(ctx, driverID, domain.DriverStatusAvailable); err != nil {
+				log.Error("cancel_update_status_failed", err)
+			}
+
+			// 2. Clear current ride assignment
+			if err := s.repo.ClearDriverCurrentRide(ctx, driverID); err != nil {
+				log.Error("cancel_clear_ride_failed", err)
+			}
+
+			// 3. Notify driver via WebSocket
+			if s.wsMgr.IsDriverConnected(driverID) {
+				if err := s.wsMgr.SendRideCancelled(driverID, rideID); err != nil {
+					log.Error("send_cancel_notification_failed", err)
+				}
+			}
+
+			// 4. Publish driver status update (Available)
+			statusUpdate := map[string]interface{}{
+				"driver_id": driverID,
+				"status":    domain.DriverStatusAvailable,
+				"timestamp": time.Now().Format(time.RFC3339),
+			}
+			statusData, _ := json.Marshal(statusUpdate)
+			if err := s.publisher.PublishDriverStatus(ctx, "driver_topic", fmt.Sprintf("driver.status.%s", driverID), statusData); err != nil {
+				log.Error("publish_driver_status_failed", err)
+			}
+		}
+
 	case "COMPLETED":
 		// Update earnings if needed
 		log.Info("ride_completed_confirmed", fmt.Sprintf("Ride completed with fare %.2f", finalFare))
