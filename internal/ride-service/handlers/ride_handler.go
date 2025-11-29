@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+
 	"ride-hail/pkg/logger"
 	"ride-hail/pkg/rabbitmq"
 

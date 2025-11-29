@@ -92,7 +92,6 @@ func (c *RideConsumer) consumeDriverResponses(ctx context.Context) {
 		c.handleDriverResponse(ctx, msg.Body)
 		msg.Ack(false)
 	})
-
 	if err != nil {
 		c.log.Error("consume_driver_responses_failed", err)
 	}
@@ -200,7 +199,6 @@ func (c *RideConsumer) consumeDriverStatus(ctx context.Context) {
 		c.handleDriverStatus(ctx, msg.Body)
 		msg.Ack(false)
 	})
-
 	if err != nil {
 		c.log.Error("consume_driver_status_failed", err)
 	}
@@ -338,7 +336,6 @@ func (c *RideConsumer) consumeLocationUpdates(ctx context.Context) {
 		c.handleLocationUpdate(ctx, msg.Body)
 		msg.Ack(false)
 	})
-
 	if err != nil {
 		c.log.Error("consume_location_updates_failed", err)
 	}

@@ -25,7 +25,7 @@ func AdminService() {
 		log.Error("startup", fmt.Errorf("Failed to load config: %w", err))
 		os.Exit(1)
 	}
-	log.Info("config_loaded", "Configuration loaded successfully: " + cfg.TestVariable)
+	log.Info("config_loaded", "Configuration loaded successfully: "+cfg.TestVariable)
 
 	pool, err := db.NewConnection(cfg, log)
 	if err != nil {
