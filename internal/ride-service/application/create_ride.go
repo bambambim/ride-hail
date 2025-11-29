@@ -110,20 +110,28 @@ func (uc *CreateRideUseCase) Execute(ctx context.Context, cmd CreateRideCommand)
 		"estimated_fare": estimatedFare,
 	}).Info("fare_calculated", "Estimated fare calculated")
 
-	// 5. Create ride domain entity
+	// 5. Get today's ride count for ride number generation
+	todayRideCount, err := uc.rideRepo.GetTodayRideCount(ctx)
+	if err != nil {
+		uc.logger.Error("get_today_ride_count_failed", err)
+		return nil, fmt.Errorf("failed to get today's ride count: %w", err)
+	}
+
+	// 6. Create ride domain entity
 	ride, err := domain.NewRide(
 		cmd.PassengerID,
 		pickup,
 		dest,
 		rideType,
 		estimatedFare,
+		todayRideCount,
 	)
 	if err != nil {
 		uc.logger.Error("create_ride_entity_failed", err)
 		return nil, fmt.Errorf("failed to create ride: %w", err)
 	}
 
-	// 6. Generate and set ride ID
+	// 7. Generate and set ride ID
 	rideID := generateUUID()
 	ride.SetID(rideID)
 
@@ -132,7 +140,7 @@ func (uc *CreateRideUseCase) Execute(ctx context.Context, cmd CreateRideCommand)
 		"passenger_id": cmd.PassengerID,
 	}).Info("ride_entity_created", "Ride entity created")
 
-	// 7. Persist ride (infrastructure layer)
+	// 8. Persist ride (infrastructure layer)
 	if err := uc.rideRepo.Save(ctx, ride); err != nil {
 		uc.logger.Error("save_ride_failed", err)
 		return nil, fmt.Errorf("failed to save ride: %w", err)
@@ -142,7 +150,7 @@ func (uc *CreateRideUseCase) Execute(ctx context.Context, cmd CreateRideCommand)
 		"ride_id": rideID,
 	}).Info("ride_persisted", "Ride saved to database")
 
-	// 8. Publish domain event (for async processing)
+	// 9. Publish domain event (for async processing)
 	event := domain.RideRequestedEvent{
 		RideID:      ride.ID(),
 		PassengerID: ride.PassengerID(),
@@ -166,7 +174,7 @@ func (uc *CreateRideUseCase) Execute(ctx context.Context, cmd CreateRideCommand)
 		}).Info("event_published", "Domain event published")
 	}
 
-	// 9. Return DTO
+	// 10. Return DTO
 	return toRideDTO(ride), nil
 }
 

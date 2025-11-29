@@ -94,6 +94,7 @@ func NewRide(
 	dest Coordinate,
 	rideType RideType,
 	estimatedFare float64,
+	todayRideCount int,
 ) (*Ride, error) {
 	// Validate ride type
 	if !rideType.IsValid() {
@@ -109,7 +110,7 @@ func NewRide(
 	}
 
 	// Generate ride number
-	rideNumber := generateRideNumber()
+	rideNumber := generateRideNumber(todayRideCount)
 
 	return &Ride{
 		passengerID:    passengerID,
@@ -304,9 +305,11 @@ func (r *Ride) SetID(id string) {
 
 // Helper functions
 
-// generateRideNumber generates a unique ride number
-func generateRideNumber() string {
-	return fmt.Sprintf("RIDE-%d", time.Now().Unix())
+// generateRideNumber generates a unique ride number in format RIDE_YYYYMMDD_XXX
+func generateRideNumber(todayRideCount int) string {
+	today := time.Now().Format("20060102")
+	counter := todayRideCount + 1
+	return fmt.Sprintf("RIDE_%s_%03d", today, counter)
 }
 
 // ValidateRideType validates a ride type string

@@ -3,9 +3,9 @@ package consumer
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
+	"ride-hail/internal/ride-service/domain"
 	"ride-hail/internal/ride-service/infrastructure/repository"
 	"ride-hail/pkg/logger"
 	"ride-hail/pkg/rabbitmq"
@@ -47,7 +47,7 @@ type DriverStatusMessage struct {
 	RideID      string    `json:"ride_id,omitempty"`
 	PassengerID string    `json:"passenger_id,omitempty"` // Added for WebSocket notification
 	OldStatus   string    `json:"old_status"`
-	NewStatus   string    `json:"status"`
+	NewStatus   string    `json:"new_status"`
 	Latitude    float64   `json:"latitude,omitempty"`
 	Longitude   float64   `json:"longitude,omitempty"`
 	Timestamp   time.Time `json:"timestamp"`
@@ -92,6 +92,7 @@ func (c *RideConsumer) consumeDriverResponses(ctx context.Context) {
 		c.handleDriverResponse(ctx, msg.Body)
 		msg.Ack(false)
 	})
+
 	if err != nil {
 		c.log.Error("consume_driver_responses_failed", err)
 	}
@@ -117,7 +118,7 @@ func (c *RideConsumer) handleDriverResponse(ctx context.Context, body []byte) {
 			c.log.WithFields(logger.LogFields{
 				"ride_id": response.RideID,
 				"error":   err.Error(),
-			}).Error("update_ride_status_failed to matched", err)
+			}).Error("update_ride_status_failed", err)
 			// Continue with WebSocket notification even if DB update fails
 		}
 
@@ -129,6 +130,25 @@ func (c *RideConsumer) handleDriverResponse(ctx context.Context, body []byte) {
 				"error":     err.Error(),
 			}).Error("assign_driver_failed", err)
 			// Continue with WebSocket notification even if assignment fails
+		}
+
+		// Save DRIVER_MATCHED event to ride_events table
+		matchedEvent := domain.RideMatchedEvent{
+			RideID:      response.RideID,
+			PassengerID: response.PassengerID,
+			DriverID:    response.DriverID,
+			MatchedAt:   time.Now(),
+		}
+		if err := c.repo.SaveEvent(ctx, response.RideID, matchedEvent); err != nil {
+			c.log.WithFields(logger.LogFields{
+				"ride_id": response.RideID,
+				"error":   err.Error(),
+			}).Error("save_matched_event_failed", err)
+		} else {
+			c.log.WithFields(logger.LogFields{
+				"ride_id":    response.RideID,
+				"event_type": "DRIVER_MATCHED",
+			}).Info("event_saved", "DRIVER_MATCHED event saved to ride_events")
 		}
 
 		// Send WebSocket notification to passenger
@@ -180,6 +200,7 @@ func (c *RideConsumer) consumeDriverStatus(ctx context.Context) {
 		c.handleDriverStatus(ctx, msg.Body)
 		msg.Ack(false)
 	})
+
 	if err != nil {
 		c.log.Error("consume_driver_status_failed", err)
 	}
@@ -211,17 +232,23 @@ func (c *RideConsumer) handleDriverStatus(ctx context.Context, body []byte) {
 		rideStatus = "IN_PROGRESS"
 	case "COMPLETED":
 		rideStatus = "COMPLETED"
+	case "MATCHED":
+		rideStatus = "MATCHED"
+	case "REQUESTED":
+		rideStatus = "REQUESTED"
+	case "CANCELLED":
+		rideStatus = "CANCELLED"
 	default:
-		// Unknown status, log and continue without DB update
+		// Unknown or empty status, log and skip DB update
 		c.log.WithFields(logger.LogFields{
 			"status": status.NewStatus,
-		}).Info("unknown_driver_status", "Unknown driver status received")
-		rideStatus = status.NewStatus
+		}).Info("unknown_driver_status", "Unknown or empty driver status received, skipping DB update")
+		// Don't update the database with invalid status
+		rideStatus = ""
 	}
 
-	// Update ride status in database if we have a valid ride_id
-	if status.RideID != "" {
-		fmt.Println(status.NewStatus, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	// Update ride status in database if we have a valid ride_id and status
+	if status.RideID != "" && rideStatus != "" {
 		if err := c.repo.UpdateRideStatus(ctx, status.RideID, rideStatus); err != nil {
 			c.log.WithFields(logger.LogFields{
 				"ride_id": status.RideID,
@@ -229,6 +256,43 @@ func (c *RideConsumer) handleDriverStatus(ctx context.Context, body []byte) {
 				"error":   err.Error(),
 			}).Error("update_ride_status_failed", err)
 			// Continue with WebSocket notification even if DB update fails
+		}
+
+		// Save status change event to ride_events table
+		statusEvent := domain.RideStatusChangedEvent{
+			RideID:    status.RideID,
+			OldStatus: domain.RideStatus(status.OldStatus),
+			NewStatus: domain.RideStatus(rideStatus),
+			ChangedAt: time.Now(),
+		}
+		if err := c.repo.SaveEvent(ctx, status.RideID, statusEvent); err != nil {
+			c.log.WithFields(logger.LogFields{
+				"ride_id": status.RideID,
+				"error":   err.Error(),
+			}).Error("save_status_event_failed", err)
+		} else {
+			c.log.WithFields(logger.LogFields{
+				"ride_id":    status.RideID,
+				"old_status": status.OldStatus,
+				"new_status": rideStatus,
+			}).Info("event_saved", "STATUS_CHANGED event saved to ride_events")
+		}
+
+		// If COMPLETED, also save RideCompletedEvent
+		if rideStatus == "COMPLETED" {
+			completedEvent := domain.RideCompletedEvent{
+				RideID:      status.RideID,
+				PassengerID: status.PassengerID,
+				DriverID:    status.DriverID,
+				FinalFare:   0, // TODO: Get final fare from message or calculate
+				CompletedAt: time.Now(),
+			}
+			if err := c.repo.SaveEvent(ctx, status.RideID, completedEvent); err != nil {
+				c.log.WithFields(logger.LogFields{
+					"ride_id": status.RideID,
+					"error":   err.Error(),
+				}).Error("save_completed_event_failed", err)
+			}
 		}
 	}
 
@@ -274,6 +338,7 @@ func (c *RideConsumer) consumeLocationUpdates(ctx context.Context) {
 		c.handleLocationUpdate(ctx, msg.Body)
 		msg.Ack(false)
 	})
+
 	if err != nil {
 		c.log.Error("consume_location_updates_failed", err)
 	}

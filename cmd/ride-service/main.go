@@ -12,12 +12,11 @@ import (
 	// Clean Architecture imports
 	"ride-hail/internal/ride-service/application"
 	"ride-hail/internal/ride-service/domain"
+	ridehttp "ride-hail/internal/ride-service/handlers"
 	"ride-hail/internal/ride-service/infrastructure/messaging"
 	"ride-hail/internal/ride-service/infrastructure/repository"
-	ridehttp "ride-hail/internal/ride-service/interface/http"
 
 	// Legacy imports (still needed for consumers, users, websocket)
-	"ride-hail/internal/ride-service/handler"
 	"ride-hail/internal/ride-service/infrastructure/consumer"
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/config"
@@ -67,7 +66,7 @@ func main() {
 	wsManager := websocket.NewManager(log)
 
 	// Initialize old handler (still needed for users, websocket, and token generation)
-	h := handler.New(dbConn, rabbit, log)
+	h := ridehttp.New(dbConn, rabbit, log)
 
 	// ========================================
 	// 🆕 Clean Architecture Setup
@@ -142,11 +141,6 @@ func main() {
 	// mux.Handle("GET /users", corsHandler(http.HandlerFunc(h.ListUsers)))               // List all users
 	// mux.Handle("GET /users/{user_id}", corsHandler(http.HandlerFunc(h.GetUser)))       // Get user by ID
 	// mux.Handle("DELETE /users/{user_id}", corsHandler(http.HandlerFunc(h.DeleteUser))) // Delete user
-
-	// Public endpoint for testing - generates tokens (remove in production!)
-	mux.Handle("POST /auth/token", corsHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.GenerateTestToken(w, r, jwtManager)
-	})))
 
 	// Protected endpoints - require JWT authentication
 	// Using Clean Architecture handlers for rides

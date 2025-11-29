@@ -25,4 +25,10 @@ type RideRepository interface {
 
 	// Delete removes a ride (soft delete recommended)
 	Delete(ctx context.Context, rideID string) error
+
+	// GetTodayRideCount returns count of rides created today (for ride number generation)
+	GetTodayRideCount(ctx context.Context) (int, error)
+
+	// SaveEvent saves a domain event to the ride_events table
+	SaveEvent(ctx context.Context, rideID string, event DomainEvent) error
 }

@@ -430,3 +430,82 @@ func (r *PostgresRideRepository) AssignDriver(ctx context.Context, rideID string
 	}
 	return nil
 }
+
+// SaveEvent saves a domain event to the ride_events table
+func (r *PostgresRideRepository) SaveEvent(ctx context.Context, rideID string, event domain.DomainEvent) error {
+	// Map domain event type to database event type
+	eventType := mapEventType(event.EventType())
+
+	// Build event data JSON
+	eventData := buildEventData(event)
+
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO ride_events (ride_id, event_type, event_data, created_at)
+		VALUES ($1, $2, $3, $4)
+	`, rideID, eventType, eventData, event.OccurredAt())
+	if err != nil {
+		return fmt.Errorf("save ride event: %w", err)
+	}
+	return nil
+}
+
+// GetTodayRideCount returns count of rides created today (for ride number generation)
+func (r *PostgresRideRepository) GetTodayRideCount(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM rides
+		WHERE DATE(requested_at) = CURRENT_DATE
+	`).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("get today ride count: %w", err)
+	}
+	return count, nil
+}
+
+// mapEventType maps domain event type to database enum value
+func mapEventType(eventType string) string {
+	switch eventType {
+	case "ride.requested":
+		return "RIDE_REQUESTED"
+	case "ride.matched":
+		return "DRIVER_MATCHED"
+	case "ride.cancelled":
+		return "RIDE_CANCELLED"
+	case "ride.completed":
+		return "RIDE_COMPLETED"
+	case "ride.status.changed":
+		return "STATUS_CHANGED"
+	default:
+		return "STATUS_CHANGED"
+	}
+}
+
+// buildEventData creates JSON event data from domain event
+func buildEventData(event domain.DomainEvent) string {
+	switch e := event.(type) {
+	case domain.RideRequestedEvent:
+		return fmt.Sprintf(`{"passenger_id": "%s", "ride_type": "%s", "estimated_fare": %.2f, "pickup": {"lat": %.8f, "lng": %.8f, "address": "%s"}, "destination": {"lat": %.8f, "lng": %.8f, "address": "%s"}}`,
+			e.PassengerID, e.RideType.String(), e.Fare,
+			e.Pickup.Latitude(), e.Pickup.Longitude(), e.Pickup.Address(),
+			e.Destination.Latitude(), e.Destination.Longitude(), e.Destination.Address())
+	case domain.RideMatchedEvent:
+		return fmt.Sprintf(`{"passenger_id": "%s", "driver_id": "%s"}`,
+			e.PassengerID, e.DriverID)
+	case domain.RideCancelledEvent:
+		driverID := ""
+		if e.DriverID != nil {
+			driverID = *e.DriverID
+		}
+		return fmt.Sprintf(`{"passenger_id": "%s", "driver_id": "%s", "reason": "%s"}`,
+			e.PassengerID, driverID, e.Reason)
+	case domain.RideCompletedEvent:
+		return fmt.Sprintf(`{"passenger_id": "%s", "driver_id": "%s", "final_fare": %.2f}`,
+			e.PassengerID, e.DriverID, e.FinalFare)
+	case domain.RideStatusChangedEvent:
+		return fmt.Sprintf(`{"old_status": "%s", "new_status": "%s"}`,
+			e.OldStatus.String(), e.NewStatus.String())
+	default:
+		return `{}`
+	}
+}

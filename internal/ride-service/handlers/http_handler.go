@@ -31,6 +31,7 @@ func NewRideHandler(
 
 // CreateRideRequest represents the HTTP request for creating a ride
 type CreateRideRequest struct {
+	PassengerID          string  `json:"passenger_id,omitempty"`
 	PickupLatitude       float64 `json:"pickup_latitude"`
 	PickupLongitude      float64 `json:"pickup_longitude"`
 	PickupAddress        string  `json:"pickup_address,omitempty"`
@@ -92,7 +93,7 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Convert HTTP request to application command
 	cmd := application.CreateRideCommand{
-		PassengerID:          passengerID,
+		PassengerID:          req.PassengerID,
 		PickupLatitude:       req.PickupLatitude,
 		PickupLongitude:      req.PickupLongitude,
 		PickupAddress:        req.PickupAddress,
