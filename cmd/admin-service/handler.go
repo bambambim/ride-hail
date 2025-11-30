@@ -1,12 +1,14 @@
-package main
+package adminservice
 
 import (
 	"context"
 	"database/sql"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"net/http"
-	"ride-hail/pkg/logger"
 	"time"
+
+	"ride-hail/pkg/logger"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AdminHandler struct {
@@ -39,6 +41,13 @@ type ActiveRidesResponse struct {
 	TotalCount int          `json:"total_count"`
 	Page       int          `json:"page"`
 	PageSize   int          `json:"page_size"`
+}
+
+func NewAdminHandler(log logger.Logger, pool *pgxpool.Pool) *AdminHandler {
+	return &AdminHandler{
+		log:  log,
+		pool: pool,
+	}
 }
 
 func (h *AdminHandler) getOverviewMetrics(w http.ResponseWriter, r *http.Request) {
@@ -181,10 +190,10 @@ func (h *AdminHandler) getActiveRides(w http.ResponseWriter, r *http.Request) {
 			r.id, r.ride_number, r.status, r.passenger_id, r.driver_id,
 			COALESCE(pickup.address, 'N/A') as pickup_address,
 			COALESCE(destination.address, 'N/A') as destination_address,
-			r.started_at,
+			r.started_at
 		FROM rides AS r
 		LEFT JOIN coordinates pickup ON r.pickup_coordinate_id = pickup.id
-		LEFT JOIN coordinates dest ON r.destination_coordinate_id = dest.id
+		LEFT JOIN coordinates destination ON r.destination_coordinate_id = destination.id
 		WHERE r.status IN ('REQUESTED', 'MATCHED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRES')
 		ORDER BY r.requested_at DESC
 		LIMIT $1 OFFSET $2

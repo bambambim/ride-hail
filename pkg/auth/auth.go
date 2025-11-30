@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Role string
@@ -63,7 +64,6 @@ func (m *JWTManager) ParseToken(tokenString string) (*AppClaims, error) {
 		return m.secretKey, nil
 	},
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed toparse token: %w", err)
 	}
@@ -71,6 +71,7 @@ func (m *JWTManager) ParseToken(tokenString string) (*AppClaims, error) {
 	if claims, ok := token.Claims.(*AppClaims); ok && token.Valid {
 		return claims, nil
 	}
+
 	return nil, fmt.Errorf("invalid token")
 }
 
@@ -90,13 +91,12 @@ func (m *JWTManager) AuthMiddleware(next http.Handler) http.Handler {
 
 		claims, err := m.ParseToken(parts[1])
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, fmt.Sprintf("invalid token: %w", err))
+			writeError(w, http.StatusUnauthorized, fmt.Sprintf("invalid token: %v", err))
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), claimsKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
-
 	})
 }
 
@@ -106,6 +106,7 @@ func GetClaims(ctx context.Context) (*AppClaims, bool) {
 	claims, ok := ctx.Value(claimsKey).(*AppClaims)
 	return claims, ok
 }
+
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -113,5 +114,4 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 		"error":   http.StatusText(code),
 		"message": msg,
 	})
-
 }

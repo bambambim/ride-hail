@@ -30,6 +30,7 @@ type Config struct {
 		DriverLocationService int
 		AdminService          int
 	}
+	TestVariable string
 }
 
 func LoadConfig(filename string) (*Config, error) {
@@ -51,14 +52,18 @@ func LoadConfig(filename string) (*Config, error) {
 	cfg.Services.RideService = getEnvAsInt("SERVICES_RIDE_SERVICE", 3000)
 	cfg.Services.DriverLocationService = getEnvAsInt("DRIVER_LOCATION_SERVICE", 3001)
 	cfg.Services.AdminService = getEnvAsInt("ADMIN_SERVICE", 3004)
+	cfg.TestVariable = getEnv("TEST_VARIABLE", "default_value")
 
 	return cfg, nil
-
 }
 
 func loadEnvFile(filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
+		// If .env file doesn't exist, that's OK - use environment variables
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return fmt.Errorf("could not open env file: %w", err)
 	}
 	defer file.Close()

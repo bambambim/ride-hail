@@ -3,11 +3,13 @@ package rabbitmq
 import (
 	"context"
 	"fmt"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"ride-hail/pkg/config"
-	"ride-hail/pkg/logger"
 	"sync"
 	"time"
+
+	"ride-hail/pkg/config"
+	"ride-hail/pkg/logger"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 const (
@@ -59,6 +61,7 @@ func NewConnection(cfg *config.Config, log logger.Logger) (*Connection, error) {
 	}
 	return nil, fmt.Errorf("failed to connect to RabbitMQ after %d retries: %w", maxRetries, err)
 }
+
 func (c *Connection) connect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -81,6 +84,7 @@ func (c *Connection) connect() error {
 	c.logger.Info("rabbitmq_connect_internal", "Connection and publisher channel established")
 	return nil
 }
+
 func (c *Connection) reconnectLoop() {
 	c.logger.Info("rabbitmq_reconnect_loop", "Starting reconnection loop")
 	for {
@@ -157,7 +161,12 @@ func (c *Connection) SetupTopology() error {
 	}
 
 	queues := []string{
-		"ride_requests", "ride_status", "driver_matching", "driver_response", "driver_status", "location_updates_ride",
+		"ride_requests",
+		"ride_status",
+		"driver_matching",
+		"driver_responses",
+		"driver_status",
+		"location_updates_ride",
 	}
 	for _, queue := range queues {
 		if _, err := ch.QueueDeclare(queue, true, false, false, false, nil); err != nil {

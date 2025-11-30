@@ -3,13 +3,15 @@ package websocket
 import (
 	"encoding/json"
 	"errors"
-	"github.com/gorilla/websocket"
 	"net/http"
-	"ride-hail/pkg/auth"
-	"ride-hail/pkg/logger"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
+
+	"ride-hail/pkg/auth"
+	"ride-hail/pkg/logger"
 )
 
 const (
@@ -98,7 +100,6 @@ func (c *Connection) writePump() {
 			return
 		}
 	}
-
 }
 
 func (c *Connection) write(mt int, payload []byte) error {
@@ -240,8 +241,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wsConn := newConnection(conn, h.log, claims)
 	go wsConn.writePump()
 	go h.onConnect(wsConn)
-
 }
+
 func sendErrorAndClose(conn *websocket.Conn, msg string) {
 	conn.SetWriteDeadline(time.Now().Add(writeWait))
 	conn.WriteJSON(wsErrorResponse{

@@ -1,0 +1,203 @@
+version: "3.8"
+
+services:
+  # ============================================
+  # PostgreSQL Database with PostGIS
+  # Shared by all services
+  # ============================================
+  postgres:
+    image: postgis/postgis:15-3.4-alpine
+    container_name: ridehail-postgres
+    environment:
+      POSTGRES_USER: ridehail_user
+      POSTGRES_PASSWORD: ridehail_pass
+      POSTGRES_DB: ridehail_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Run migrations in order
+      - ./migrations/01_ride_service.sql:/docker-entrypoint-initdb.d/01_ride_service.sql:ro
+      - ./migrations/02_driver_location_service.sql:/docker-entrypoint-initdb.d/02_driver_location_service.sql:ro
+      - ./migrations/03_mock_data.sql:/docker-entrypoint-initdb.d/03_mock_data.sql:ro
+    networks:
+      - ridehail-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ridehail_user -d ridehail_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ============================================
+  # RabbitMQ Message Broker
+  # Shared by all services
+  # ============================================
+  rabbitmq:
+    image: rabbitmq:4.2.1-management-alpine
+    container_name: ridehail-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI (http://localhost:15672)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ridehail-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ============================================
+  # Ride Service (Port 3000)
+  # Handles: ride creation, cancellation, passenger WebSocket
+  # ============================================
+  ride-service:
+    build:
+      context: .
+      dockerfile: ./internal/ride-service/Dockerfile
+    container_name: ridehail-ride-service
+
+    env_file:
+      - .env
+
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ridehail_user
+      DB_PASS: ridehail_pass
+      DB_NAME: ridehail_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      RIDE_SERVICE_PORT: 3000
+    ports:
+      - "3000:3000"
+    networks:
+      - ridehail-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # ============================================
+  # Driver Location Service (Port 3001)
+  # Handles: driver online/offline, location updates, driver WebSocket
+  # ============================================
+  driver-location-service:
+    build:
+      context: .
+      dockerfile: ./internal/driver_location_service/Dockerfile
+    container_name: ridehail-driver-location
+
+    env_file:
+      - .env
+
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ridehail_user
+      DB_PASS: ridehail_pass
+      DB_NAME: ridehail_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      DRIVER_LOCATION_SERVICE_PORT: 3001
+    ports:
+      - "3001:3001"
+    networks:
+      - ridehail-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./cmd/auth-service/Dockerfile
+    container_name: ridehail-auth-service
+
+    env_file:
+      - .env
+
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ridehail_user
+      DB_PASS: ridehail_pass
+      DB_NAME: ridehail_db
+      AUTH_SERVICE_PORT: 3005
+    ports:
+      - "3005:3005"
+    networks:
+      - ridehail-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+# ============================================
+# Admin Service (Port 3004) - Optional
+# Handles: monitoring, metrics, admin dashboard
+# ============================================
+# admin-service:
+#   build:
+#     context: .
+#     dockerfile: Dockerfile.admin
+#   container_name: ridehail-admin
+#   environment:
+#     DB_HOST: postgres
+#     DB_PORT: 5432
+#     DB_USER: ridehail_user
+#     DB_PASS: ridehail_pass
+#     DB_NAME: ridehail_db
+#     ADMIN_SERVICE_PORT: 3004
+#   ports:
+#     - "3004:3004"
+#   networks:
+#     - ridehail-network
+#   depends_on:
+#     postgres:
+#       condition: service_healthy
+#   restart: unless-stopped
+
+networks:
+  ridehail-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  rabbitmq_data:

@@ -1,4 +1,4 @@
-package main
+package adminservice
 
 import (
 	"context"
@@ -7,15 +7,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"ride-hail/pkg/auth"
 	"ride-hail/pkg/config"
 	"ride-hail/pkg/db"
 	"ride-hail/pkg/logger"
-	"syscall"
-	"time"
 )
 
-func main() {
+func AdminService() {
 	log := logger.NewLogger("admin-service")
 	log.Info("startup", "Starting admin service")
 
@@ -24,6 +25,8 @@ func main() {
 		log.Error("startup", fmt.Errorf("Failed to load config: %w", err))
 		os.Exit(1)
 	}
+	log.Info("config_loaded", "Configuration loaded successfully: "+cfg.TestVariable)
+
 	pool, err := db.NewConnection(cfg, log)
 	if err != nil {
 		log.Error("startup", fmt.Errorf("Failed to connect to database: %w", err))
@@ -34,15 +37,12 @@ func main() {
 	sKey := os.Getenv("JWT_SECRET_KEY")
 	if sKey == "" {
 		log.Error("startup", fmt.Errorf("JWT_SECRET_KEY environment variable not set"))
-		os.Exit(1)
+		sKey = "someone"
 	}
-	jwtManager := auth.NewJWTManager("someone", 1*time.Hour)
+	jwtManager := auth.NewJWTManager(sKey, 1*time.Hour)
 
 	mux := http.NewServeMux()
-	adminHandler := &AdminHandler{
-		log:  log,
-		pool: pool,
-	}
+	adminHandler := NewAdminHandler(log, pool)
 
 	overviewHandler := jwtManager.AuthMiddleware(adminOnly(log, http.HandlerFunc(adminHandler.getOverviewMetrics)))
 	activeRidesHandler := jwtManager.AuthMiddleware(adminOnly(log, http.HandlerFunc(adminHandler.getActiveRides)))
@@ -84,5 +84,4 @@ func main() {
 	}
 
 	log.Info("shutdown", "Admin service shutdown complete")
-
 }
